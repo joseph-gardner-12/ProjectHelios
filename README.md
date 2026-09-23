@@ -10,7 +10,6 @@ uv manages Python dependencies and the backend virtual environment.
 apps/
   frontend/   React + TypeScript + Vite
   backend/    Django + SQLite, managed with uv
-scripts/      Workspace tooling
 ```
 
 The workspace also reserves `libs/*` for future shared JavaScript/TypeScript packages.

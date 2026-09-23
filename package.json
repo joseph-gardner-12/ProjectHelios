@@ -8,7 +8,6 @@
     "pnpm": ">=11 <12"
   },
   "scripts": {
-    "preinstall": "node scripts/require-pnpm.mjs",
     "setup": "pnpm run setup:portless && pnpm run setup:backend",
     "setup:portless": "portless proxy start --no-tls && portless alias projecthelios 5173",
     "setup:backend": "uv sync --project apps/backend && pnpm run backend:migrate",
