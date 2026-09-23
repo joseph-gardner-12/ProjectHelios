@@ -1,0 +1,36 @@
+{
+  "name": "project-helios",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@11.2.2",
+  "engines": {
+    "node": ">=24",
+    "pnpm": ">=11 <12"
+  },
+  "scripts": {
+    "preinstall": "node scripts/require-pnpm.mjs",
+    "setup": "pnpm run setup:portless && pnpm run setup:backend",
+    "setup:portless": "portless proxy start --no-tls && portless alias projecthelios 5173",
+    "setup:backend": "uv sync --project apps/backend && pnpm run backend:migrate",
+    "dev": "concurrently --kill-others --names backend,frontend \"pnpm run dev:backend\" \"pnpm run dev:web\"",
+    "dev:backend": "uv run --project apps/backend python apps/backend/manage.py runserver 127.0.0.1:8000",
+    "dev:web": "pnpm run setup:portless && pnpm --filter @project-helios/frontend dev",
+    "dev:frontend": "pnpm run dev:web",
+    "backend:manage": "uv run --project apps/backend python apps/backend/manage.py",
+    "backend:migrate": "pnpm run backend:manage migrate",
+    "backend:shell": "pnpm run backend:manage shell",
+    "build": "pnpm run build:frontend",
+    "build:frontend": "pnpm --filter @project-helios/frontend build",
+    "typecheck": "pnpm --filter @project-helios/frontend typecheck",
+    "lint": "pnpm run lint:frontend && pnpm run lint:backend",
+    "lint:frontend": "pnpm --filter @project-helios/frontend lint",
+    "lint:backend": "uv run --project apps/backend ruff check apps/backend",
+    "check:backend": "pnpm run backend:manage check",
+    "test:backend": "pnpm run backend:manage test apps/backend/core",
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run check:backend && pnpm run test:backend"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "portless": "0.15.6"
+  }
+}

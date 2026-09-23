@@ -1,0 +1,7 @@
+packages:
+  - "apps/*"
+  - "libs/*"
+
+minimumReleaseAge: 1440
+allowBuilds:
+  esbuild: true
