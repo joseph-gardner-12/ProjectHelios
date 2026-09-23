@@ -36,6 +36,32 @@ The shared proxy stays running when the apps stop. Its first start on port 80 ma
 prompt for administrator access. The setup preserves other projects' aliases.
 Direct access at http://localhost:5173 also works.
 
+## Development and production
+
+| Environment | Website | Routing configuration |
+| --- | --- | --- |
+| Local development | `http://projecthelios.localhost` (or `http://localhost:5173`) | Portless alias in `package.json`; SPA fallback and local API proxy in `apps/frontend/vite.config.ts` |
+| Production | `https://projecthelios.dev` (currently redirects to `https://www.projecthelios.dev`) | Vercel domain settings and `apps/frontend/vercel.json` |
+
+For local development, run `pnpm dev` or `pnpm dev:web`. Direct links such as
+`http://projecthelios.localhost/control` are served by Vite's SPA fallback.
+The `.localhost` URLs refer to the computer running the development servers.
+
+For production, set the Vercel project's **Root Directory** to `apps/frontend`.
+The configuration there selects Vite, runs `pnpm run build`, and publishes `dist`.
+It rewrites `/control`, `/about`, and `/team` to `/index.html` so React Router can
+render direct links and refreshes. Trailing slashes are normalized away.
+New frontend routes must be added to this rewrite list. Assets and `/api` are not
+included in these rewrites; configure production backend routing separately.
+
+Keep `projecthelios.dev` and `www.projecthelios.dev` assigned to the production
+Vercel project. Do not add them to the Portless alias or Vite's local allowed hosts.
+Commit and deploy configuration changes through the production deployment workflow;
+editing local files does not update the live site.
+
+A sitemap is separate from routing: it lists canonical production URLs for search
+engines. It must not include `.localhost` URLs and does not fix direct-link 404s.
+
 `pnpm setup` installs backend dependencies and applies migrations to a local,
 ignored SQLite database. No external database service is needed for this starter.
 Commit both `pnpm-lock.yaml` and `apps/backend/uv.lock` when changing dependencies.
