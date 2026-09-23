@@ -1,0 +1,282 @@
+\documentclass[10pt,letterpaper]{article}
+\usepackage[margin=0.72in,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern,microtype}
+\usepackage[table]{xcolor}
+\usepackage{longtable,array,booktabs,enumitem,needspace}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta,positioning}
+\usepackage{xurl}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\definecolor{ink}{HTML}{193342}
+\definecolor{accent}{HTML}{197B86}
+\definecolor{pale}{HTML}{EDF4F5}
+\hypersetup{colorlinks=true,linkcolor=ink,urlcolor=accent,pdftitle={Project Helios: System Plan and Inventory},pdfauthor={Project Helios}}
+\pagestyle{fancy}\fancyhf{}
+\fancyhead[L]{\small\sffamily\color{ink}PROJECT HELIOS}
+\fancyhead[R]{\small\sffamily System plan and inventory}
+\fancyfoot[L]{\footnotesize Planning baseline | 23 September 2026}
+\fancyfoot[R]{\footnotesize\thepage}
+\renewcommand{\headrulewidth}{0.3pt}
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{4pt}
+\setlength{\emergencystretch}{3em}
+\setlist{nosep,leftmargin=1.5em,topsep=4pt}
+\renewcommand{\arraystretch}{1.15}
+\setlength{\tabcolsep}{5pt}
+\newcolumntype{P}[1]{>{\raggedright\arraybackslash}p{#1}}
+\begin{document}
+\hypersetup{pageanchor=false}\begin{titlepage}
+\vspace*{1.1in}
+{\sffamily\color{accent}\Large PROJECT HELIOS\par}
+\vspace{0.3in}
+{\sffamily\color{ink}\fontsize{32}{37}\selectfont System plan\\and inventory\par}
+\vspace{0.3in}
+{\Large Cloud-connected indoor drone and Raspberry Pi dock\par}
+\vspace{0.5in}
+\rule{\textwidth}{0.8pt}
+\vspace{0.15in}
+\textbf{Team}\quad Two electrical engineers and two computer engineers\par
+\textbf{Planning date}\quad 23 September 2026\par
+\textbf{Demonstration target}\quad 1 November 2026\par
+\textbf{Submission deadline}\quad 16 November 2026\par
+\vspace{0.35in}
+\colorbox{pale}{\parbox{\dimexpr\textwidth-2\fboxsep}{\vspace{9pt}\textbf{Baseline scope}\par One indoor drone, UWB localization, a Raspberry Pi at the dock, cloud-hosted control, automatic return and landing, and manual battery charging.\vspace{9pt}}}
+\vfill
+{\small Proposed implementation plan. Hardware combinations and acceptance targets require validation. Budget figures are planning allowances, not supplier quotes.\par}
+\end{titlepage}
+\hypersetup{pageanchor=true}
+\pagenumbering{roman}
+\tableofcontents
+\newpage
+\pagenumbering{arabic}
+Planning date: September 23, 2026. Team: two electrical engineers (EE1, EE2) and two computer engineers (CE1, CE2). This is a proposed implementation plan, not a verified shopping cart.
+
+\Needspace{9\baselineskip}\section{Intended demonstration}
+An authorized user opens projecthelios.dev, sees the system's actual readiness and position, selects a destination in a configured indoor volume, and requests a flight. A Raspberry Pi at the dock validates the request against live hardware state and supervises takeoff, movement, return, descent, and landing. PX4 on the aircraft stabilizes the drone and controls its motors.
+
+Carry forward the existing scope: one drone, one dock, roughly 10 $\times$ 10 $\times$ 10 ft of localization space, automatic return and landing, and \textbf{manual battery charging}. Use an empty, supervised flight area; obstacle avoidance, autonomous charging, multiple drones, outdoor flight, and video streaming are separate extensions. Usable flight volume is smaller than the room because the vehicle and its stopping distance need clearance.
+
+The existing repository contains React/TypeScript/Vite, React Router, a simulated control screen, and a Django health endpoint. Authentication, hardware integration, production backend configuration, durable commands, and real telemetry still need implementation. The README describes Vercel frontend deployment; this plan does not verify the live deployment.
+
+\Needspace{9\baselineskip}\section{Architecture and responsibilities}
+
+\begin{center}
+\begin{tikzpicture}[node distance=7mm,box/.style={draw=ink!40,fill=pale,rounded corners=3pt,align=center,text width=10.5cm,minimum height=9mm,font=\small},arr/.style={-{Stealth},thick,color=accent}]
+\node[box] (web) {\textbf{Browser} --- React control interface};
+\node[box,below=of web] (cloud) {\textbf{Cloud} --- Django REST API and Channels\\PostgreSQL records; Redis live-event distribution};
+\node[box,below=of cloud] (pi) {\textbf{Dock} --- Raspberry Pi gateway and flight supervisor};
+\node[box,below=of pi] (bridge) {\textbf{Aircraft} --- Wireless MAVLink bridge $\leftrightarrow$ UART $\leftrightarrow$ PX4};
+\draw[arr,<->] (web)--node[right,font=\scriptsize]{HTTPS / WSS}(cloud);
+\draw[arr,<->] (cloud)--node[right,font=\scriptsize]{Pi initiates WSS}(pi);
+\draw[arr,<->] (pi)--node[right,font=\scriptsize]{Local network}(bridge);
+\end{tikzpicture}
+\end{center}
+\textbf{Localization path:} airborne UWB tag $\leftrightarrow$ fixed anchors $\rightarrow$ one USB-connected anchor $\rightarrow$ Pi.\par
+\textbf{Independent operator path:} local RC transmitter $\rightarrow$ aircraft receiver $\rightarrow$ PX4.\par
+
+The Pi stays at the dock. The aircraft carries a flight controller, tag, and radio bridge; it does not need a second Pi for the baseline. Internet carries high-level requests and downsampled telemetry. Localization and continuous flight supervision stay local. PX4 retains stabilization, estimation, motor outputs, and onboard failsafe handling.
+
+Recommended deployment: retain Vercel for the static frontend; run Django as an always-on ASGI service on Render with PostgreSQL and a Redis-compatible service. Configure api.projecthelios.dev, TLS, backups, secrets, health checks, and origin rules. Render supports WebSockets; clients still need heartbeat and reconnect logic. Choose service tiers explicitly and account for their recurring cost. \href{https://render.com/docs/websocket}{Render documentation}
+
+\Needspace{9\baselineskip}\section{Hardware inventory}
+Required means required for the proposed baseline; exact models remain subject to bench validation. Quantities cover one aircraft and dock.
+
+\Needspace{4\baselineskip}\subsection{Dock and local network}
+\begingroup\small\begin{longtable}{P{1.562in}P{0.781in}P{3.383in}P{0.781in}}
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endhead
+\bottomrule\endfoot
+Raspberry Pi & 1 & Recommend Pi 4 Model B, 4 GB for the non-vision gateway; Pi 5 is an alternative if already available. Benchmark selected hardware. & CE1 \\ \addlinespace[2pt]
+Model-appropriate regulated Pi power supply & 1 & Include sufficient USB peripheral power budget; do not power flight batteries through the Pi. & EE2 \\ \addlinespace[2pt]
+Storage & 1 + spare & 32--64 GB high-endurance microSD and reader; log rotation and a recoverable image. SSD is optional. & CE1 \\ \addlinespace[2pt]
+Enclosure and cooling & 1 set & Ventilated dock enclosure, strain relief, model-appropriate heatsink/fan. & EE2 \\ \addlinespace[2pt]
+Landing platform & 1 & Flat, rigid, non-slip, sized from aircraft footprint plus measured landing error and margin. & EE2 \\ \addlinespace[2pt]
+Local flight-enable control and status indication & 1 set & GPIO switch/button, LEDs, resistors, wiring. Arming inhibit is distinct from independent aircraft override. & EE2 \\ \addlinespace[2pt]
+Router/access point with internet & 1 existing or new & Dedicated local network without client isolation/captive portal; outbound WSS permitted. Prefer wired Ethernet to Pi. & CE1 \\ \addlinespace[2pt]
+Ethernet and USB data cables & As needed & Known data-capable cables, sufficient reach, secured connectors. & EE2 \\ \addlinespace[2pt]
+Powered USB hub & Conditional & Only if port count or measured peripheral load requires it. & EE2 \\ \addlinespace[2pt]
+Pi UPS or backup supply & Optional & Protects local service availability; it is not a substitute for PX4 failsafes. & EE2 \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+\Needspace{4\baselineskip}\subsection{Indoor localization}
+\begingroup\small\begin{longtable}{P{1.562in}P{0.781in}P{3.383in}P{0.781in}}
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endhead
+\bottomrule\endfoot
+UWB anchor modules & 4 minimum; provision for 6 & Compatible multi-anchor ranging firmware; use non-coplanar placement and test actual geometry. & EE2 \\ \addlinespace[2pt]
+Airborne UWB tag & 1 & Same compatible system; weigh complete assembly and check regulator, antenna placement, and current draw. & EE2 \\ \addlinespace[2pt]
+Anchor supplies and cables & 4--6 sets & Stable wall power for normal operation; do not rely on unmonitored internal batteries. & EE2 \\ \addlinespace[2pt]
+Anchor mounts & 4--6 & Rigid, surveyed antenna locations at varied heights; no moving tripods during tests. & EE2 \\ \addlinespace[2pt]
+USB connection to collector anchor & 1 & Verify exact firmware exposes the complete tag-to-anchor range set here. & CE1 \\ \addlinespace[2pt]
+Tag mount and power harness & 1 & Secure and separated from propellers and major interference sources. & EE1 \\ \addlinespace[2pt]
+Survey equipment and reference markers & 1 set & Tape/laser measure, level, coordinate labels, ground-truth points and heights. & EE2 \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Makerfabs MaUWB Direct anchors and a MaUWB ESP32S3 tag are candidates from earlier research, not interchangeable with arbitrary DW3000 development boards. Confirm protocol, complete range-set rate, and mass before ordering the full set. See hardware verification\footnote{Repository reference: \nolinkurl{../research/dock-hardware-verification.md}.} and earlier UWB research\footnote{Repository reference: \nolinkurl{../research/python-uwb-integration.md}.}.
+
+\Needspace{4\baselineskip}\subsection{Aircraft and local operator control}
+\begingroup\small\begin{longtable}{P{1.562in}P{0.781in}P{3.383in}P{0.781in}}
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Item} & \textbf{Quantity} & \textbf{Specification or decision} & \textbf{Owner} \\\midrule\endhead
+\bottomrule\endfoot
+Small guarded frame & 1 & Fit room, payload, FC mounting, battery, tag, bridge, and range sensor. & EE1 \\ \addlinespace[2pt]
+Brushless motors & 4 + spare & Matched to propeller diameter, battery voltage, total mass, and thrust requirements. & EE1 \\ \addlinespace[2pt]
+ESC & 1 four-in-one or 4 individual & Correct voltage/current rating and PX4-compatible output protocol; include wiring/capacitor. & EE1 \\ \addlinespace[2pt]
+Propellers and guards & Installed set + $\geq$2 spare sets & Correct shaft fit and rotation; guards must clear loaded props. & EE1 \\ \addlinespace[2pt]
+PX4-supported flight controller & 1 & Kakute H7 Mini is a candidate; verify exact revision, firmware target, sensors, UARTs, and logging limits. & EE1 \\ \addlinespace[2pt]
+IMU/barometer & Usually on FC & Verify onboard parts and PX4 drivers; don't purchase duplicate modules by default. & EE1 \\ \addlinespace[2pt]
+Validated heading source & 1 solution & Supported external magnetometer is the baseline candidate; characterize indoor magnetic distortion. One UWB tag cannot measure yaw. & EE1/CE1 \\ \addlinespace[2pt]
+Downward rangefinder & 1 & PX4-supported driver/interface, suitable minimum range, floor response and field of view. & EE1 \\ \addlinespace[2pt]
+Airborne MAVLink radio bridge & 1 & Tested Wi-Fi-to-UART bridge plus firmware, antenna, regulator and harness. For telemetry-radio alternative, include a ground radio too. & CE1/EE1 \\ \addlinespace[2pt]
+RC transmitter and batteries & 1 set & Local independent operator mode override. & EE1 \\ \addlinespace[2pt]
+Compatible RC receiver & 1 & Verify receiver protocol, FC UART/inversion requirements and PX4 support. & EE1 \\ \addlinespace[2pt]
+Flight batteries & 2--3 & Chemistry, cell count, discharge capability, mass and connector matched to propulsion. & EE1 \\ \addlinespace[2pt]
+Balance charger and power supply & 1 set & Matched to battery chemistry/cell count, with correct main and balance leads. & EE1 \\ \addlinespace[2pt]
+Power distribution and voltage regulation & 1 set & May be integrated with ESC/FC; document every rail, connector and current budget. & EE1 \\ \addlinespace[2pt]
+Voltage/current measurement & 1 solution & Integrated or supported external sensing; calibrated for low-battery behavior. & EE1 \\ \addlinespace[2pt]
+Landing feet, mounts, straps and harness & 1 set + spares & Vibration isolation, fasteners, heat shrink, wire, connectors, cable restraint. & EE1 \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Do not finalize motor/ESC/battery/frame models independently. Produce a mass budget, peak/hover power budget, thrust check, connector pinout and UART allocation first. A supported CPU family does not establish PX4 board compatibility. A magnetometer that fails in the room requires a new heading solution and schedule/budget revision.
+
+\Needspace{4\baselineskip}\subsection{Shared equipment and facilities}
+\begin{itemize}
+\item Development computers; an Ubuntu workstation or compatible VM for the selected PX4 simulation environment.
+\item Soldering station, solder, flux, fume extraction, crimping tools, cutters, tweezers, hex drivers and multimeter.
+\item Current-limited bench supply, smoke stopper/current limiter, oscilloscope or logic analyzer, and USB-to-UART adapter with correct logic voltage.
+\item ST-Link programmer and appropriate leads if the selected MaUWB STM32 firmware must be upgraded; confirm board access and vendor flashing procedure.
+\item Scale, calipers, measuring tape, level, fabrication access (3D printer/laser cutter or basic shop), mounting materials and fasteners.
+\item Approved flight enclosure/netting and room access; designated operator and observer; lab battery handling/storage provisions and PPE.
+\item Spare props, motor, connectors, storage card and cables; label maker/tape and a camera/phone for trial recordings.
+\item Git hosting, deployment accounts, domain/DNS access and shared issue tracker. Record account ownership and recovery access.
+\end{itemize}
+\Needspace{9\baselineskip}\section{Software, frameworks and libraries}
+Keep the existing stack. Install new dependencies only when their subsystem is implemented; pin tested versions and commit lockfiles.
+
+\begingroup\small\begin{longtable}{P{1.329in}P{2.060in}P{3.256in}}
+\toprule\rowcolor{pale}\textbf{Layer} & \textbf{Baseline} & \textbf{Purpose/status} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Layer} & \textbf{Baseline} & \textbf{Purpose/status} \\\midrule\endhead
+\bottomrule\endfoot
+Frontend & React, TypeScript, Vite, React Router, CSS/SVG & Already present; retain current room view, replace simulation with measured state. \\ \addlinespace[2pt]
+Browser HTTP/live connection & Native fetch and WebSocket & Enough for this scope; implement reconnect, schema checks, stale state and error handling. \\ \addlinespace[2pt]
+Optional frontend helpers & TanStack Query; Zod & Add if server-state caching or runtime schema validation reduces custom code; not mandatory dependencies. \\ \addlinespace[2pt]
+Backend & Python, Django & Present; users, permissions, configuration, command lifecycle and admin. \\ \addlinespace[2pt]
+HTTP API & Django REST Framework & Proposed serializers, validation and permissions; plain Django is possible, but choose one consistent API approach. \\ \addlinespace[2pt]
+WebSocket server & Channels, channels\_redis, Daphne & Proposed ASGI application and cross-process live events. \\ \addlinespace[2pt]
+Production persistence & PostgreSQL, psycopg & Durable records; existing SQLite stays useful for lightweight local development. \\ \addlinespace[2pt]
+Live event transport & Redis & Channels distribution; never the only durable record of accepted flight commands. \\ \addlinespace[2pt]
+Dock OS & Raspberry Pi OS Lite 64-bit & Headless service host; verify Python and ARM64 dependency availability. \\ \addlinespace[2pt]
+Dock runtime & Python, asyncio, systemd, journald & Long-running gateway, bounded tasks, automatic startup, watchdog and logs. \\ \addlinespace[2pt]
+UWB I/O & pyserial & Device-specific serial parser with bounded reads and timeouts. \\ \addlinespace[2pt]
+Localization & NumPy, scipy.optimize.least\_squares & 3D multilateration, calibration, robust residuals and quality checks. \\ \addlinespace[2pt]
+Dock/cloud connection & websockets; Pydantic & WSS client, explicit message schemas and runtime validation. \\ \addlinespace[2pt]
+Flight commands & MAVSDK Python native bindings & Proposed offboard commands/telemetry; pin API generation and bench-check Python/ARM64. Legacy gRPC versions additionally require mavsdk\_server. \\ \addlinespace[2pt]
+External position messages & pymavlink & Send the chosen PX4-compatible external-position message with correct frames, times and uncertainty. \\ \addlinespace[2pt]
+MAVLink routing & mavlink-router, if multiple consumers & Separate endpoints for SDK, position injection, logging and QGroundControl; one command authority. \\ \addlinespace[2pt]
+GPIO & gpiozero, compatible backend & Flight-enable switch and status lights; validate selected Pi/OS support. \\ \addlinespace[2pt]
+Airborne autopilot & PX4 stable release, pinned & Flight estimation and control, configuration and failsafes. \\ \addlinespace[2pt]
+Configuration tool & QGroundControl & Firmware setup, calibration, parameter export and bench diagnostics on a development computer. \\ \addlinespace[2pt]
+UWB/bridge firmware tools & Vendor flasher; Arduino IDE or PlatformIO if required & Pin firmware and configuration; customize only where transport requires it. \\ \addlinespace[2pt]
+Simulation & PX4 SITL and compatible Gazebo release & Simulated aircraft, offboard workflow and failure injection on development hardware. \\ \addlinespace[2pt]
+Testing & Django tests; pytest for gateway; Playwright for browser & Add pytest-asyncio if needed; replay captured UWB packets and test disconnected hardware paths. \\ \addlinespace[2pt]
+Development & Git, pnpm, uv, Node.js, Ruff, Oxlint, TypeScript & Existing tooling; GitHub Actions or equivalent for CI. \\ \addlinespace[2pt]
+Deployment & Docker for cloud if useful; systemd for Pi & Reproducible ASGI image and explicit migrations; simple supervised Pi service. \\ \addlinespace[2pt]
+Analysis & NumPy, Matplotlib; pandas if needed & Localization error, landing dispersion, latency and availability plots. \\ \addlinespace[2pt]
+Monitoring/storage & Structured logs, uptime checks, backups; optional Sentry/object storage & Preserve command/fault history and downloadable test logs. \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Channels' production cross-process layer uses Redis; its in-memory layer cannot distribute events between worker processes. \href{https://channels.readthedocs.io/en/latest/topics/channel_layers.html}{Channels documentation} DRF provides the API framework; verify its supported Django/Python versions when locking dependencies. \href{https://www.django-rest-framework.org/}{DRF documentation} SciPy supports bounds and robust losses for least-squares fitting. \href{https://docs.scipy.org/doc/scipy/reference/generated/scipy.optimize.least_squares.html}{SciPy documentation}
+
+The backend currently pins Python 3.14. The gateway should have its own pyproject.toml and lockfile: do not assume every flight/serial/scientific package supports that Python version on ARM64. Keep web and gateway protocol-compatible even if their Python runtimes differ. ROS 2, Kubernetes, MQTT, Celery, a custom flight controller, and a custom UWB PCB are not baseline requirements. Avoid introducing a second cloud transport alongside WSS without a concrete need.
+
+Current MAVSDK documentation describes native Linux aarch64 wheels, including 64-bit Raspberry Pi OS; older gRPC examples use a different deployment/API. Select one generation and test the needed offboard and telemetry functions on the Pi. \href{https://mavsdk.mavlink.io/main/en/python/quickstart.html}{MAVSDK quickstart}
+
+\Needspace{9\baselineskip}\section{Work that libraries will not implement for us}
+\Needspace{4\baselineskip}\subsection{Gateway and localization}
+Create apps/gateway with separate modules for UWB transport/parser, calibration/solver, coordinate transforms, PX4 adapter, flight state machine, cloud client, configuration and logging. Run hardware ownership in one supervised gateway instance; prevent duplicate serial/MAVLink owners. Keep cloud I/O and uploads from blocking the local control path, and bound queues and log storage.
+
+Survey anchor antenna centers, calibrate range biases, convert all values to meters, associate ranges with their actual measurement epochs, and reject malformed/stale/incomplete measurements. Measure geometry, residuals, latency, dropouts, and independent position error. If readings are sequential, account for time skew while the aircraft moves. Record antenna-to-aircraft reference-point offset.
+
+PX4's external-position guide calls for roughly 30--50 Hz message streaming and requires correct frames, timestamps and estimator configuration. Its offboard keepalive is a separate requirement, with a 2 Hz minimum described in the guide. Plan a 20 Hz setpoint loop and a validated 30--50 Hz external-position path; benchmark both. Those are different streams. Do not forward repeated old ranges with new timestamps to appear faster. If the UWB system cannot meet the selected PX4 estimator requirements, change the localization design or demonstrate a properly modeled estimator before flight. \href{https://docs.px4.io/main/en/ros/external_position_estimation}{External-position guide}, \href{https://docs.px4.io/main/en/flight_modes/offboard}{offboard guide}
+
+Use room coordinates with Z up and meters in every application payload. Define the full rotation/translation into the selected PX4 local frame, including heading and height reference; merely negating Z is insufficient in general. Convert feet only at the UI boundary. Configure position fusion without pretending a single UWB tag supplies measured attitude or velocity. Preserve covariance/quality and actual acquisition times.
+
+\Needspace{4\baselineskip}\subsection{Command path}
+\begin{enumerate}
+\item Operator signs in and obtains the single active control lease for this aircraft.
+\item Browser submits a high-level command over HTTPS. Backend checks identity, permission, lease, configured bounds, type, schema and expiry.
+\item Backend commits a command record before notifying the Pi over its outbound WSS connection. It reports accepted/pending, not successful flight.
+\item Pi independently checks command ID, expiry, active configuration revision, lease/session generation, local flight enable, battery, link, estimator and flight state.
+\item Pi acknowledges acceptance or rejection and owns execution. It limits acceleration/speed and supervises all transitions locally.
+\item Actual telemetry and command outcomes flow back to the cloud and browser. Reconnection reconciles state; it does not automatically replay old movement commands.
+\end{enumerate}
+Command fields: schema version, UUID, aircraft/dock ID, command type, parameters, meter-based frame ID, issue/expiry times, control-lease generation, and room/configuration revision. Telemetry includes boot/session ID, sequence, sample time, last-command ID, measured position, target, flight state, battery, localization age/quality, link health and fault reason. Use UTC for audit times and monotonic clocks for local durations; define clock-skew handling. Transport delivery is not exactly-once physical execution: deduplicate, persist local outcomes, and treat a crash during execution as unknown until reconciled.
+
+Suggested states: OFFLINE $\rightarrow$ DISARMED $\rightarrow$ READY $\rightarrow$ TAKING\_OFF $\rightarrow$ MOVING $\rightarrow$ HOLDING $\rightarrow$ RETURNING $\rightarrow$ LANDING $\rightarrow$ DISARMED, with explicit FAULT/ABORT paths. Separate dock connectivity from aircraft flight state. Confirm arrival from measured position and settling criteria, and landed/disarmed from aircraft feedback. Define HOLD, RETURN and LAND separately; a web ``stop'' action must not mean cutting motors in the air. Block geometry/calibration changes during an active flight.
+
+\Needspace{4\baselineskip}\subsection{Backend and UI}
+Data records: users/roles, rooms, anchors, docks/device credentials, aircraft, configuration revisions, control leases, flights, commands, acknowledgments, fault events and log references. Keep full-rate logs local and upload after flight; persist sampled telemetry in the cloud with retention limits. Initial UI update target: 5--10 Hz, independently of the flight loop.
+
+Suggested endpoints: current session/login/logout; rooms/configuration; dock/aircraft status; control-lease acquire/release; command creation/detail; flight history/detail/log download. Separate browser and device WebSocket endpoints and authentication. Use Django session authentication with secure cookies/CSRF for browser requests, explicit CORS/CSRF and WebSocket origin allowlists for the chosen domains, and distinct revocable device credentials for the Pi. Store no deployment secrets in Vite public variables.
+
+UI must show measured and commanded positions separately, actual battery/readiness/faults, telemetry age, command pending/accepted/executing/completed/rejected states and an explicit simulation indicator. A closed browser does not stop the local supervisor. Simulation animation and reduced-motion settings must never fabricate vehicle movement or completion. Replace the mock corner dock at (0,0,0) with surveyed coordinates and physical clearance.
+
+\Needspace{4\baselineskip}\subsection{Failure policy to implement and verify}
+\begingroup\small\begin{longtable}{P{1.764in}P{5.020in}}
+\toprule\rowcolor{pale}\textbf{Event} & \textbf{Required behavior} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Event} & \textbf{Required behavior} \\\midrule\endhead
+\bottomrule\endfoot
+Browser closes & Gateway retains ownership of the active sequence; no new command arrives implicitly. \\ \addlinespace[2pt]
+Cloud/internet lost & Reject new remote starts; after configured timeout use locally tested return/land policy only while position and path remain valid. \\ \addlinespace[2pt]
+Localization invalid & Stop accepting movement and enter validated estimator-loss response; do not attempt blind dock return. \\ \addlinespace[2pt]
+Pi crashes or local MAVLink lost & Onboard PX4 handles configured loss response independently of the Pi. \\ \addlinespace[2pt]
+Battery low & Use measured thresholds and validated land/return policy; critical level must not start a long return. \\ \addlinespace[2pt]
+Duplicate, expired or conflicting command & Reject/deduplicate; log a reason; never execute twice because of a reconnect. \\ \addlinespace[2pt]
+Gateway restarts & Read actual aircraft state, invalidate stale authority, reconcile records; do not re-arm or resume automatically. \\ \addlinespace[2pt]
+Local operator overrides & RC mode override takes priority; gateway relinquishes autonomous command authority. \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Implement these as explicit transitions with measured timeout values after bench/SITL validation. Position hold itself requires a valid estimate. The physical emergency control must have a defined effect and independent aircraft path; a button that only depends on the Pi/cloud is not an independent override.
+
+\Needspace{9\baselineskip}\section{Team ownership and handoffs}
+\begingroup\small\begin{longtable}{P{1.329in}P{2.060in}P{3.256in}}
+\toprule\rowcolor{pale}\textbf{Person} & \textbf{Primary work} & \textbf{Required handoff} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Person} & \textbf{Primary work} & \textbf{Required handoff} \\\midrule\endhead
+\bottomrule\endfoot
+EE1 --- aircraft/power & Propulsion sizing, wiring, FC/ESC/sensor/RC assembly, battery system, PX4 calibration, flight readiness & Mass/power budget, wiring and port map, parameter export, repeatable operator-controlled aircraft test \\ \addlinespace[2pt]
+EE2 --- dock/localization hardware & Dock design, Pi power/enclosure, UWB mounts/firmware/survey, flight-enable electronics, fabrication & Surveyed anchor/dock coordinates, firmware manifest, raw range recordings and electrical acceptance results \\ \addlinespace[2pt]
+CE1 --- embedded integration/flight software & Pi setup, UWB parser/solver, frame/time alignment, MAVLink integration, state machine, failsafes and local logs & Gateway that passes replay/SITL/bench tests and a documented device protocol \\ \addlinespace[2pt]
+CE2 --- cloud/frontend & Django API/auth/storage, WSS, deployment, React real telemetry/commands, CI and browser tests & Hosted system working against a simulated gateway, with command lifecycle and permissions \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Pair EE2+CE1 for positioning, EE1+CE1 for flight integration, and CE1+CE2 for the protocol. CE1 is the likely workload bottleneck: CE2 should own the gateway simulator/protocol fixtures and EE2 should own repeatable localization data collection. All four participate in integration and test reviews. Each subsystem needs a second teammate able to reproduce its setup.
+
+\Needspace{9\baselineskip}\section{Delivery gates and definition of done}
+Retain the day-by-day roadmap\footnote{Repository reference: \nolinkurl{../project-roadmap.md}.}, November 1 demonstration target and November 16 submission deadline. Dates are targets; readiness gates control flight progression.
+
+\begingroup\small\begin{longtable}{P{1.764in}P{5.020in}}
+\toprule\rowcolor{pale}\textbf{Target} & \textbf{Gate and evidence} \\\midrule\endfirsthead
+\toprule\rowcolor{pale}\textbf{Target} & \textbf{Gate and evidence} \\\midrule\endhead
+\bottomrule\endfoot
+Sep 25 & BOM candidate compatibility, mass/power/port budget, delivered quotes, role ownership and procurement lead times recorded \\ \addlinespace[2pt]
+Oct 4 & Hosted browser $\rightarrow$ simulated gateway $\rightarrow$ acknowledged outcome $\rightarrow$ actual simulated telemetry; permissions and expiry tested \\ \addlinespace[2pt]
+Oct 11 & Surveyed handheld UWB trials throughout the usable volume, including dock height; measured error/rate/latency/dropouts \\ \addlinespace[2pt]
+Oct 18 & Frames and estimator verified with props removed; repeated supervised hover/landing and RC override verified \\ \addlinespace[2pt]
+Oct 25 & Browser-requested destination and local dock return/landing demonstrated repeatedly \\ \addlinespace[2pt]
+Nov 1 & Cold-start end-to-end demonstration recorded; feature freeze \\ \addlinespace[2pt]
+Nov 8 & Failure matrix, repeatability data, wiring, operating guide and setup reproduction complete \\ \addlinespace[2pt]
+Nov 16 & Report, slides, source, configuration, BOM, logs/results and backup video submitted \\ \addlinespace[2pt]
+\end{longtable}\endgroup
+Proposed acceptance targets, to freeze with the team before testing: 95th-percentile static horizontal error $\leq$0.15 m and vertical error $\leq$0.20 m; waypoint arrival within 0.25 m for two seconds; at least 9 successful full-pad landings in 10 recorded trials with no boundary breach; valid command acknowledgment within one second under the test network. These are project targets, not UWB product guarantees or sufficient flight-safety criteria. Require the actual error distribution, vehicle radius, overshoot and stopping distance to fit the room margins; revise the design if they do not.
+
+Measure dynamic error and dropout duration as well as static error. Use independently surveyed reference points and recordings, not two displays of the same estimate. Choose a pad whose usable half-width exceeds vehicle half-width plus measured landing dispersion and margin. Test each failure path in simulation/bench conditions first, including broker restart, Pi restart, corrupt serial data, stale position, invalid axis transforms, expired commands and duplicate delivery.
+
+\Needspace{9\baselineskip}\section{Budget and remaining design decisions}
+Earlier research estimated \$770--\$1,095 for aircraft, four-anchor localization, RC, charging equipment, basic pad and consumables, \textbf{excluding a dedicated Pi kit}. Add a provisional \$100--\$180 Pi/power/storage/enclosure allowance: roughly \textbf{\$870--\$1,275 hardware}, before new lab equipment, enclosure, router, optional sensors, hosting and additional anchors. This is arithmetic on older planning allowances, not current supplier pricing or a delivered quote. The earlier four-to-six-anchor allowance added about \$86; refresh all listings and avoid double-counting shared dock cabling. Maintain a 15--20\% contingency when replacing allowances with quotes.
+
+Budget frontend/backend service plans, PostgreSQL, Redis, domain renewal, backups/log storage, shipping/taxes, replacement parts and fabrication. Existing university equipment and credits should be listed as borrowed/provided, not silently treated as purchased for \$0. An \$800 ceiling probably requires borrowed hardware or scope/funding changes.
+
+Before placing final orders, record: exact aircraft/FC/firmware combination; matched propulsion and measured payload budget; heading and range sensor models; UWB firmware/protocol/rate; UART and power allocations; local radio/network design; physical room/dock geometry; hosting tiers; agreed acceptance limits. Select the smallest viable prototype combination and test its highest-risk interfaces early. Exact motor, frame, rangefinder and bridge SKUs remain open because a compatible assembly has not yet been demonstrated.
+
+If automatic charging becomes a requirement, add dock and aircraft contacts, alignment/capture, charger/controller appropriate to the battery and balance needs, power/contact/temperature sensing, landed and disarmed interlocks, protected power switching and an independently tested charge state machine. Camera/AprilTag alignment, optical flow, extra anchors and an onboard companion computer are conditional additions if measured navigation performance demands them; each changes mass, software, budget and schedule.
+
+\Needspace{9\baselineskip}\section{Required project artifacts}
+Maintain a requirements/acceptance matrix, reviewed BOM with quantities and delivered cost, mechanical drawing, wiring/pinout diagram, mass/power budgets, room/anchor survey, API/message schema, state/failure diagram, versioned firmware and PX4 parameters, provisioning/recovery scripts, deployment configuration, test fixtures/results, operating checklist, issue/risk register, final report/slides and backup demonstration video. No purchased library replaces these integration deliverables.
+
+\end{document}

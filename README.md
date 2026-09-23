@@ -15,6 +15,12 @@ apps/
 The workspace also reserves `libs/*` for future shared JavaScript/TypeScript packages.
 Python dependencies belong in `apps/backend/pyproject.toml`, not package.json.
 
+## Project planning
+
+- [System plan, hardware/software inventory, and team responsibilities](docs/planning/system-plan.md)
+- [Day-by-day delivery roadmap](docs/project-roadmap.md)
+- [Dock hardware and deployment verification](docs/research/dock-hardware-verification.md)
+
 ## Quick start
 
 Install Node.js 24+ (the `.nvmrc` selects 24), pnpm 11.2.2, and uv.
