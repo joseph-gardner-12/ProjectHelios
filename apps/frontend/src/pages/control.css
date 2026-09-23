@@ -65,6 +65,7 @@
   .xy-control { width: 100%; max-width: 440px; justify-self: center; }
 }
 @media (max-width: 540px) {
+  .flight-arrow { display: none; }
   .control-intro { align-items: flex-start; flex-direction: column; gap: 18px; }
   .panel-heading { padding: 20px 16px 0; }
   .target-controls { margin-inline: 16px; gap: 18px; grid-template-columns: minmax(0, 1fr) 46px; }
