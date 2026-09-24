@@ -10,6 +10,7 @@ uv manages Python dependencies and the backend virtual environment.
 apps/
   frontend/   React + TypeScript + Vite
   backend/    Django + SQLite, managed with uv
+  localization/  Dock-side Python localization service scaffold, managed with uv
 ```
 
 The workspace also reserves `libs/*` for future shared JavaScript/TypeScript packages.
@@ -17,6 +18,7 @@ Python dependencies belong in `apps/backend/pyproject.toml`, not package.json.
 
 ## Project planning
 
+- [Localization setup, commands, and implementation guide](docs/localization.md)
 - [Accepted architecture: UWB X/Y, barometric Z, SiK, and ArduPilot (ADR-0001)](docs/adr/0001-uwb-sik-ardupilot-navigation.md)
 - [System plan, hardware/software inventory, and team responsibilities](docs/planning/system-plan.md)
 - [Day-by-day delivery roadmap](docs/project-roadmap.md)
@@ -88,6 +90,17 @@ For reproducible installs, use `pnpm install --frozen-lockfile` and
 | `pnpm backend:shell` | Open the Django shell |
 | `pnpm check` | TypeScript, frontend/backend lint, Django checks and backend tests |
 | `pnpm build` | Type-check and build the frontend |
+| `pnpm setup:localization` | Install the localization environment and dev tools |
+| `pnpm localization:simulate` | Reserved simulation command; implementation pending |
+| `pnpm localization:replay` | Reserved replay command; implementation pending |
+| `pnpm localization:run` | Reserved hardware runtime command; implementation pending |
+| `pnpm test:localization` | Run pytest; exits 5 until localization tests are added |
+| `pnpm lint:localization` | Lint the localization scaffold |
+
+Localization is currently structure-only and is not included in `pnpm dev`,
+`pnpm setup`, or `pnpm check`. Its Python modules are empty; simulation, replay,
+and hardware commands will fail until the CLI is implemented. See the
+[localization guide](docs/localization.md) for details.
 
 Add frontend packages with `pnpm --filter @project-helios/frontend add <package>`.
 Add root development tools with `pnpm add -Dw <package>`.

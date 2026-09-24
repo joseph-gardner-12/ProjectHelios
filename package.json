@@ -1,6 +1,6 @@
 {
   "name": "project-helios",
-  "version": "0.1.0",
+  "version": "0.0.1",
   "private": true,
   "packageManager": "pnpm@11.2.2",
   "engines": {
@@ -11,6 +11,12 @@
     "setup": "pnpm run setup:portless && pnpm run setup:backend",
     "setup:portless": "portless proxy start --no-tls && portless alias projecthelios 5173",
     "setup:backend": "uv sync --project apps/backend && pnpm run backend:migrate",
+    "setup:localization": "uv sync --locked --project apps/localization",
+    "localization:simulate": "uv run --locked --project apps/localization helios-localization simulate",
+    "localization:replay": "uv run --locked --project apps/localization helios-localization replay",
+    "localization:run": "uv run --locked --project apps/localization helios-localization run",
+    "test:localization": "uv run --locked --project apps/localization pytest -c apps/localization/pyproject.toml apps/localization/tests",
+    "lint:localization": "uv run --locked --project apps/localization ruff check apps/localization",
     "dev": "concurrently --kill-others --names backend,frontend \"pnpm run dev:backend\" \"pnpm run dev:web\"",
     "dev:backend": "uv run --project apps/backend python apps/backend/manage.py runserver 127.0.0.1:8000",
     "dev:web": "pnpm run setup:portless && pnpm --filter @project-helios/frontend dev",

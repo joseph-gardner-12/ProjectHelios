@@ -1,0 +1,29 @@
+[project]
+name = "project-helios-localization"
+version = "0.1.0"
+description = "Project Helios dock-side localization service scaffold"
+requires-python = ">=3.14,<3.15"
+dependencies = []
+
+[project.scripts]
+helios-localization = "helios_localization.__main__:main"
+
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/helios_localization"]
+
+[dependency-groups]
+dev = ["pytest>=8,<10", "ruff>=0.15,<1"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+target-version = "py314"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
