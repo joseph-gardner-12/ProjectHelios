@@ -17,6 +17,7 @@ Python dependencies belong in `apps/backend/pyproject.toml`, not package.json.
 
 ## Project planning
 
+- [Accepted architecture: UWB X/Y, barometric Z, SiK, and ArduPilot (ADR-0001)](docs/adr/0001-uwb-sik-ardupilot-navigation.md)
 - [System plan, hardware/software inventory, and team responsibilities](docs/planning/system-plan.md)
 - [Day-by-day delivery roadmap](docs/project-roadmap.md)
 - [Dock hardware and deployment verification](docs/research/dock-hardware-verification.md)
