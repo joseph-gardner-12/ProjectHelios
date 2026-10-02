@@ -19,3 +19,5 @@ CHANNEL_LAYERS = (
     if REDIS_URL
     else {"default": {"BACKEND": "channels.layers.InMemoryChannelLayer"}}
 )
+
+CSRF_TRUSTED_ORIGINS = CONTROL_BROWSER_ORIGINS  # noqa: F405

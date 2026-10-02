@@ -94,7 +94,10 @@ def redis_channels(url):
         "default": {
             "BACKEND": "channels_redis.core.RedisChannelLayer",
             "CONFIG": {
-                "hosts": [{"address": url, "socket_connect_timeout": 2, "socket_timeout": 2}],
+                # Channels blocks for five seconds on an idle receive. Redis-py's
+                # default read timeout is also five seconds, so set an explicit
+                # margin to avoid disconnecting healthy, idle WebSockets.
+                "hosts": [{"address": url, "socket_connect_timeout": 2, "socket_timeout": 10}],
                 "prefix": "helios",
                 "capacity": 100,
                 "expiry": 60,

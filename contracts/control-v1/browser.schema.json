@@ -1,0 +1,229 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "version",
+    "type",
+    "device_id",
+    "connection_id",
+    "timestamp",
+    "frame_version",
+    "revision",
+    "sequence",
+    "health",
+    "position",
+    "position_at",
+    "source",
+    "command",
+    "queue",
+    "can_send",
+    "name"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "type": {
+      "const": "snapshot"
+    },
+    "device_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "connection_id": {
+      "anyOf": [
+        {
+          "type": "string",
+          "format": "uuid"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "frame_version": {
+      "const": "dummy-enu-v1"
+    },
+    "revision": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": -1
+    },
+    "health": {
+      "enum": [
+        "fresh",
+        "stale",
+        "offline"
+      ]
+    },
+    "position": {
+      "anyOf": [
+        {
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "z": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "position_at": {
+      "type": [
+        "number",
+        "null"
+      ]
+    },
+    "source": {
+      "const": "dummy"
+    },
+    "command": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "id",
+        "request_id",
+        "target",
+        "status",
+        "reason"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "request_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "z": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            }
+          }
+        },
+        "status": {
+          "enum": [
+            "pending_ack",
+            "accepted",
+            "arrived",
+            "rejected",
+            "unconfirmed",
+            "interrupted"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "queue": {
+      "type": "object",
+      "required": [
+        "position",
+        "joined",
+        "controller",
+        "lease_id",
+        "expires_at",
+        "releasing"
+      ],
+      "properties": {
+        "position": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "joined": {
+          "type": "boolean"
+        },
+        "controller": {
+          "type": "boolean"
+        },
+        "lease_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "expires_at": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "releasing": {
+          "type": "boolean"
+        }
+      }
+    },
+    "can_send": {
+      "type": "boolean"
+    },
+    "name": {
+      "type": "string"
+    }
+  },
+  "additionalProperties": false
+}

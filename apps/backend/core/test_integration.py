@@ -1,22 +1,48 @@
 import asyncio
 import os
+import uuid
 from unittest import skipUnless
 
 from channels.layers import get_channel_layer
 from channels.testing import WebsocketCommunicator
+from channels_redis.core import RedisChannelLayer
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import connection
 from django.test import SimpleTestCase, TransactionTestCase
 
 from config.asgi import application
+from config.settings.environment import redis_channels
+
+
+@skipUnless(os.environ.get("HELIOS_INTEGRATION_TESTS") == "1", "Requires Redis")
+class IdleRedisTests(SimpleTestCase):
+    async def test_idle_channel_survives_blocking_read_timeout(self):
+        config = redis_channels(settings.REDIS_URL)["default"]["CONFIG"]
+        layer = RedisChannelLayer(**{**config, "prefix": f"idle-test-{uuid.uuid4().hex}"})
+        channel = await layer.new_channel()
+
+        async def delayed_send():
+            # Cross an entire empty blocking read before delivering a message.
+            await asyncio.sleep(layer.brpop_timeout + 1)
+            await layer.send(channel, {"type": "test.idle"})
+
+        sender = asyncio.create_task(delayed_send())
+        try:
+            message = await asyncio.wait_for(layer.receive(channel), timeout=12)
+            self.assertEqual(message, {"type": "test.idle"})
+        finally:
+            sender.cancel()
+            await asyncio.gather(sender, return_exceptions=True)
+            await layer.close_pools()
 
 
 class ASGITests(SimpleTestCase):
-    async def test_websocket_upgrade_is_rejected_until_auth_is_implemented(self):
-        socket = WebsocketCommunicator(application, "/ws/device/")
+    async def test_pi_websocket_requires_authentication(self):
+        socket = WebsocketCommunicator(application, "/ws/v1/pi/")
         connected, code = await socket.connect()
         self.assertFalse(connected)
-        self.assertEqual(code, 1008)
+        self.assertEqual(code, 4401)
         await socket.disconnect()
 
 

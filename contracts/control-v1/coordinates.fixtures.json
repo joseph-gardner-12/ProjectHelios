@@ -1,0 +1,74 @@
+[
+  {
+    "name": "origin",
+    "valid": true,
+    "position": {
+      "x": 0,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "name": "ten feet",
+    "valid": true,
+    "position": {
+      "x": 3.048,
+      "y": 3.048,
+      "z": 3.048
+    }
+  },
+  {
+    "name": "negative",
+    "valid": false,
+    "position": {
+      "x": -1,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "name": "outside",
+    "valid": false,
+    "position": {
+      "x": 3.049,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "name": "boolean",
+    "valid": false,
+    "position": {
+      "x": true,
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "name": "string",
+    "valid": false,
+    "position": {
+      "x": "1",
+      "y": 0,
+      "z": 0
+    }
+  },
+  {
+    "name": "missing axis",
+    "valid": false,
+    "position": {
+      "x": 0,
+      "y": 0
+    }
+  },
+  {
+    "name": "extra axis",
+    "valid": false,
+    "position": {
+      "x": 0,
+      "y": 0,
+      "z": 0,
+      "w": 1
+    }
+  }
+]

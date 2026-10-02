@@ -1,0 +1,374 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Helios Pi protocol v1",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "telemetry_hz"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "setup"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        },
+        "telemetry_hz": {
+          "const": 5
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "ready"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "heartbeat"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "command_id",
+        "expires_at",
+        "target"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "target"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "expires_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "target": {
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "z": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "command_id",
+        "accepted"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "ack"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "accepted": {
+          "type": "boolean"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "command_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "arrival"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        },
+        "command_id": {
+          "type": "string",
+          "format": "uuid"
+        }
+      }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "position",
+        "source",
+        "state",
+        "sequence"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "position"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "const": "dummy-enu-v1"
+        },
+        "position": {
+          "type": "object",
+          "required": [
+            "x",
+            "y",
+            "z"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            },
+            "z": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 3.048
+            }
+          }
+        },
+        "source": {
+          "const": "dummy"
+        },
+        "state": {
+          "enum": [
+            "idle",
+            "moving"
+          ]
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "command_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "completed_command_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "uuid"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

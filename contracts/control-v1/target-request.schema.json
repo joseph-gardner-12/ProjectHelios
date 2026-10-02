@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": [
+    "request_id",
+    "lease_id",
+    "frame_version",
+    "target"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "request_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "lease_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "frame_version": {
+      "const": "dummy-enu-v1"
+    },
+    "target": {
+      "type": "object",
+      "required": [
+        "x",
+        "y",
+        "z"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.048
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.048
+        },
+        "z": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 3.048
+        }
+      }
+    }
+  }
+}

@@ -15,6 +15,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "corsheaders",
     "core",
+    "control",
 ]
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -68,3 +69,11 @@ LOGGING = {
     "root": {"handlers": ["console"], "level": "INFO"},
     "loggers": {"django": {"handlers": ["console"], "level": "INFO", "propagate": False}},
 }
+
+# Control is unavailable until Redis, a demo device, and a shared password hash are configured.
+CONTROL_PASSWORD_HASH = os.environ.get("CONTROL_PASSWORD_HASH", "")
+CONTROL_DEMO_DEVICE_ID = os.environ.get("CONTROL_DEMO_DEVICE_ID", "")
+CONTROL_REDIS_PREFIX = os.environ.get("CONTROL_REDIS_PREFIX", "helios:control:v1")
+AUTHENTICATION_BACKENDS = ["control.auth.DemoBackend", "django.contrib.auth.backends.ModelBackend"]
+CONTROL_BROWSER_ORIGINS = ["http://projecthelios.localhost", "http://localhost:5173",
+                           "http://127.0.0.1:5173"]
