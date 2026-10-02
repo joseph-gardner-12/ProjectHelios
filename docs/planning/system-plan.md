@@ -2,6 +2,8 @@
 
 > Architecture update (September 24, 2026): [ADR-0001](../adr/0001-uwb-sik-ardupilot-navigation.md) is the accepted baseline and supersedes this plan's conflicting PX4, aircraft, Wi-Fi bridge, UWB 3D, and rangefinder recommendations. This earlier plan remains historical planning input; its inventory and estimates need reconciliation with the ADR.
 
+> Backend update (September 30, 2026): [ADR-0002](../adr/0002-digitalocean-backend-foundation.md) supersedes this plan's Render hosting recommendation with one DigitalOcean Droplet and GitHub Actions. See its implementation checkpoint and the [deployment runbook](../backend-deployment.md) before continuing backend work.
+
 Planning date: September 23, 2026. Team: two electrical engineers (EE1, EE2) and two computer engineers (CE1, CE2). This is a proposed implementation plan, not a verified shopping cart.
 
 ## 1. Intended demonstration

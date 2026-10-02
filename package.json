@@ -31,7 +31,7 @@
     "lint:frontend": "pnpm --filter @project-helios/frontend lint",
     "lint:backend": "uv run --project apps/backend ruff check apps/backend",
     "check:backend": "pnpm run backend:manage check",
-    "test:backend": "pnpm run backend:manage test apps/backend/core",
+    "test:backend": "pnpm run backend:manage test apps/backend --settings=config.settings.test",
     "check": "pnpm run typecheck && pnpm run lint && pnpm run check:backend && pnpm run test:backend"
   },
   "devDependencies": {

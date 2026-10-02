@@ -18,6 +18,8 @@ Python dependencies belong in `apps/backend/pyproject.toml`, not package.json.
 
 ## Project planning
 
+- [Backend setup, GitHub deployment, and manual setup steps](docs/backend-deployment.md)
+- [Backend architecture and continuation status (ADR-0002)](docs/adr/0002-digitalocean-backend-foundation.md)
 - [Localization setup, commands, and implementation guide](docs/localization.md)
 - [Accepted architecture: UWB X/Y, barometric Z, SiK, and ArduPilot (ADR-0001)](docs/adr/0001-uwb-sik-ardupilot-navigation.md)
 - [System plan, hardware/software inventory, and team responsibilities](docs/planning/system-plan.md)
@@ -106,9 +108,13 @@ Add frontend packages with `pnpm --filter @project-helios/frontend add <package>
 Add root development tools with `pnpm add -Dw <package>`.
 Add Python packages with `uv add --project apps/backend <package>`.
 
-The backend settings are for local development. Production needs deployment
-settings (secret key, debug disabled, allowed hosts, database and static files)
-and a web server that serves the frontend build and routes `/api` to Django.
+The backend defaults to `config.settings.local` with SQLite. Production uses
+`config.settings.production`, PostgreSQL, Redis, Daphne, and Caddy on DigitalOcean;
+the frontend remains on Vercel. Deployment assets and GitHub Actions are included,
+but provisioning, DNS, SSH secrets, and live verification require the
+[manual setup steps](docs/backend-deployment.md). `/api/health/` checks the process;
+`/api/ready/` checks PostgreSQL/SQLite and Redis and returns 503 if Redis is not configured.
+No public application WebSocket endpoints or device/command features exist yet.
 
 Tooling references: [pnpm workspaces](https://pnpm.io/workspaces),
 [Vite](https://vite.dev/guide/), and [Django](https://docs.djangoproject.com/en/6.0/).

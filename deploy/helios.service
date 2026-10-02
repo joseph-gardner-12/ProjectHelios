@@ -1,0 +1,26 @@
+[Unit]
+Description=Helios Django ASGI backend
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=helios-app
+Group=helios-app
+WorkingDirectory=/srv/helios/current/apps/backend
+EnvironmentFile=/etc/helios/backend.env
+EnvironmentFile=/srv/helios/current/release.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/helios/current/apps/backend/.venv/bin/daphne -b 127.0.0.1 -p 8000 --http-timeout 30 config.asgi:application
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

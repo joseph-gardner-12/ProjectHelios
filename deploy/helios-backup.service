@@ -1,0 +1,15 @@
+[Unit]
+Description=Helios PostgreSQL backup
+After=postgresql.service
+
+[Service]
+Type=oneshot
+User=helios-deploy
+Group=helios-deploy
+ExecStart=/usr/local/bin/helios-backup daily
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/backups/helios
+UMask=0077

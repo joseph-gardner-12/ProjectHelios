@@ -1,0 +1,123 @@
+name: Backend checks and deployment
+
+on:
+  pull_request:
+    paths: ['apps/backend/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
+  push:
+    branches: [main]
+    paths: ['apps/backend/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: helios
+          POSTGRES_USER: helios
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U helios -d helios"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: helios
+      POSTGRES_USER: helios
+      POSTGRES_PASSWORD: ci-only-password
+      REDIS_URL: redis://127.0.0.1:6379/0
+      DJANGO_SETTINGS_MODULE: config.settings.test
+      HELIOS_INTEGRATION_TESTS: '1'
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: '0.11.16'
+          enable-cache: true
+          cache-dependency-glob: apps/backend/uv.lock
+      - name: Install locked dependencies
+        run: uv sync --locked --project apps/backend
+      - name: Lint, check migrations, and test PostgreSQL/Redis
+        run: |
+          uv run --locked --project apps/backend ruff check apps/backend
+          uv run --locked --project apps/backend python apps/backend/manage.py check
+          uv run --locked --project apps/backend python apps/backend/manage.py makemigrations --check --dry-run
+          uv run --locked --project apps/backend python apps/backend/manage.py migrate --noinput
+          uv run --locked --project apps/backend python apps/backend/manage.py test apps/backend
+      - name: Validate production settings and static collection
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.production
+          DJANGO_SECRET_KEY: ci-only-production-check-abcdefghijklmnopqrstuvwxyz-0123456789
+          DJANGO_ALLOWED_HOSTS: api.projecthelios.dev
+          DJANGO_FRONTEND_ORIGINS: https://www.projecthelios.dev,https://projecthelios.dev
+        run: |
+          uv run --locked --project apps/backend python apps/backend/manage.py check --deploy --fail-level WARNING
+          uv run --locked --project apps/backend python apps/backend/manage.py collectstatic --noinput
+      - name: Validate deployment scripts
+        run: |
+          for script in deploy/*.sh; do bash -n "$script"; done
+          shellcheck deploy/*.sh
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: helios-production-deployment
+      cancel-in-progress: false
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
+        with:
+          persist-credentials: false
+      - name: Prepare SSH and tested source archive
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo 'Set DEPLOY_HOST'; exit 1; }
+          [[ "$DEPLOY_USER" == helios-deploy ]] || { echo 'Set DEPLOY_USER=helios-deploy'; exit 1; }
+          [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo 'Set SSH secrets'; exit 1; }
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/helios_deploy
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/helios_deploy ~/.ssh/known_hosts
+          git archive --format=tar.gz --output="$RUNNER_TEMP/$GITHUB_SHA.tar.gz" "$GITHUB_SHA" apps/backend
+      - name: Upload and deploy
+        run: |
+          set -euo pipefail
+          # A queued older run must not replace a newer commit on main.
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/commits/main" --jq .sha)
+          if [[ "$latest" != "$GITHUB_SHA" ]]; then
+            echo 'A newer commit is on main; skipping this obsolete deployment.'
+            exit 0
+          fi
+          options=(-i ~/.ssh/helios_deploy -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15)
+          archive="$RUNNER_TEMP/$GITHUB_SHA.tar.gz"
+          checksum=$(sha256sum "$archive" | cut -d ' ' -f 1)
+          scp "${options[@]}" "$archive" "$DEPLOY_USER@$DEPLOY_HOST:/srv/helios/incoming/$GITHUB_SHA.tar.gz.partial"
+          ssh "${options[@]}" "$DEPLOY_USER@$DEPLOY_HOST" \
+            "mv /srv/helios/incoming/$GITHUB_SHA.tar.gz.partial /srv/helios/incoming/$GITHUB_SHA.tar.gz && /usr/local/bin/helios-deploy $GITHUB_SHA $checksum"
+      - name: Remove runner SSH credentials
+        if: always()
+        run: rm -f ~/.ssh/helios_deploy ~/.ssh/known_hosts

@@ -1,0 +1,10 @@
+api.projecthelios.dev {
+	handle_path /static/* {
+		root * /srv/helios/current/apps/backend/staticfiles
+		file_server
+	}
+
+	handle {
+		reverse_proxy 127.0.0.1:8000
+	}
+}
