@@ -145,10 +145,12 @@ Verify another personal-key login before closing the original session. The root
 key remains the administrative recovery path; routine deployments use the limited
 deployment account.
 
-## 7. Add four GitHub repository secrets
+## 7. Add four GitHub Production environment secrets
 
-Open **GitHub → repository Settings → Secrets and variables → Actions → New
-repository secret**. No paid GitHub environment feature is required.
+Open **GitHub → repository Settings → Environments → Production → Environment
+secrets → Add environment secret**. Create the `Production` environment if it
+does not exist. The deployment job explicitly selects this environment so it can
+access these secrets; the check job does not receive them.
 
 | Secret | Value |
 | --- | --- |
@@ -174,6 +176,13 @@ Copy that public line into the secret. Do not trust an unauthenticated
 `ssh-keyscan` result without verifying its fingerprint. Changing the server's host
 key later requires updating this secret deliberately. GitHub needs no DigitalOcean
 API token, database password, or Django secret.
+
+If deployment says `DEPLOY_HOST is unavailable`, confirm that the secret is in
+the `Production` environment's **secrets**, not its variables, and that the
+workflow on `main` declares `environment: Production` on the deploy job. If it
+reports an invalid format, save only the IPv4 address or hostname without a URL,
+port, spaces, or trailing newline. After a workflow edit, start a new run on the
+updated `main`; rerunning an old failed run uses its old workflow revision.
 
 ## 8. Deploy and verify
 

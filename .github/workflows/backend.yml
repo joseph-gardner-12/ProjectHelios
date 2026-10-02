@@ -76,6 +76,7 @@ jobs:
   deploy:
     needs: check
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    environment: Production
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
@@ -94,7 +95,8 @@ jobs:
       - name: Prepare SSH and tested source archive
         run: |
           set -euo pipefail
-          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo 'Set DEPLOY_HOST'; exit 1; }
+          [[ -n "$DEPLOY_HOST" ]] || { echo '::error::DEPLOY_HOST is unavailable. Add it under Settings > Environments > Production > Environment secrets.'; exit 1; }
+          [[ "$DEPLOY_HOST" =~ ^[a-zA-Z0-9.-]+$ ]] || { echo '::error::DEPLOY_HOST must be a plain IPv4 address or hostname, without https://, a port, spaces, or newlines.'; exit 1; }
           [[ "$DEPLOY_USER" == helios-deploy ]] || { echo 'Set DEPLOY_USER=helios-deploy'; exit 1; }
           [[ -n "$DEPLOY_SSH_KEY" && -n "$DEPLOY_KNOWN_HOSTS" ]] || { echo 'Set SSH secrets'; exit 1; }
           mkdir -p ~/.ssh

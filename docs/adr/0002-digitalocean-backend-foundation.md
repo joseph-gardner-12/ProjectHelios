@@ -76,3 +76,18 @@ This phase adds no domain models or public WebSocket endpoints. The existing
 Django user model and admin remain. Redis is transient distribution; PostgreSQL
 owns durable records. Local development retains SQLite; integration checks use
 PostgreSQL and Redis. Production data is never copied from a developer database.
+
+## Deployment checkpoint — 2026-10-02
+
+GitHub [run 37019358480](https://github.com/joseph-gardner-12/ProjectHelios/actions/runs/37019358480)
+passed the check job and failed deployment before SSH at the `DEPLOY_HOST`
+validation. Repository secrets were empty; the four expected secret names were
+present in the `Production` environment. Secret values were neither retrieved nor
+printed. The workflow did not select that environment, so its secret references
+resolved to empty values.
+
+The local workflow fix selects `environment: Production` and distinguishes a
+missing host from malformed input. The runbook now matches that secret scope.
+Next: commit/push the fix and start a new workflow run on updated `main`. An old
+run's retry retains the old workflow revision. Successful SSH, cloud deployment,
+public readiness, and recovery remain unverified.
