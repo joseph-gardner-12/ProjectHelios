@@ -11,7 +11,8 @@ export default defineConfig({
     strictPort: true,
     allowedHosts: ['projecthelios.localhost'],
     proxy: {
-      '/api': 'http://127.0.0.1:8000',
+      '/api': process.env.HELIOS_DEV_BACKEND ?? 'http://127.0.0.1:8000',
+      '/ws': { target: process.env.HELIOS_DEV_BACKEND ?? 'http://127.0.0.1:8000', ws: true },
     },
   },
 })

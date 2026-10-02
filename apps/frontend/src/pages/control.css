@@ -78,3 +78,15 @@
 .dock-marker { fill: #29212f; stroke: var(--color-muted); stroke-width: 1.5; }
 .dock-marker text { fill: var(--color-muted); stroke: none; }
 .xy-dock { fill: #29212f; stroke: var(--color-muted); stroke-width: 1.5; }
+
+.control-access, .control-status { padding: 24px; margin-bottom: 20px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-background); }
+.control-access { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; }
+.control-access h2, .control-access p { width: 100%; margin: 0; }
+.control-access p, .control-status span, .control-detail { color: var(--color-muted); font-size: 14px; line-height: 1.6; }
+.control-access label { display: grid; gap: 8px; flex: 1 1 220px; }
+.control-access input { min-height: 44px; min-width: 0; padding: 10px; background: transparent; color: var(--color-text); border: 1px solid var(--color-border); border-radius: 5px; }
+.control-access button, .control-status button { min-height: 44px; padding: 10px 18px; background: transparent; color: var(--color-text); border: 1px solid var(--color-border); border-radius: 5px; cursor: pointer; }
+.control-status div { display: flex; flex-wrap: wrap; gap: 12px; }
+.target-panel > .control-detail { margin: 16px 24px 0; }
+.control-error { color: #ffb8aa; padding: 12px 16px; border: 1px solid #98564b; border-radius: 5px; }
+.control-status p { overflow-wrap: anywhere; }
