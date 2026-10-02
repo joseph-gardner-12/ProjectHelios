@@ -1,0 +1,24 @@
+[Unit]
+Description=Helios localization dummy runtime (no flight control)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=helios-pi
+Group=helios-pi
+WorkingDirectory=/opt/helios/apps/localization
+EnvironmentFile=/etc/helios/localization.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/helios/apps/localization/.venv/bin/helios-localization simulate
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

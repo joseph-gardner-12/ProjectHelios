@@ -13,3 +13,12 @@ apps/backend/staticfiles/
 !.env.example
 .DS_Store
 *.tsbuildinfo
+
+# Browser test artifacts
+apps/frontend/test-results/
+apps/frontend/playwright-report/
+output/control-*.json
+output/control-*.png
+
+# Private local development data and saved Pi configuration
+.helios/

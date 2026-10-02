@@ -91,3 +91,17 @@ missing host from malformed input. The runbook now matches that secret scope.
 Next: commit/push the fix and start a new workflow run on updated `main`. An old
 run's retry retains the old workflow revision. Successful SSH, cloud deployment,
 public readiness, and recovery remain unverified.
+
+### Bootstrap follow-up — 2026-10-02
+
+The user subsequently reported SSH reaching the remote deployment command but
+finding `/usr/local/bin/helios-deploy` missing. Rerunning bootstrap reported
+`/root/uv.toml: Permission denied`. The script switched to the deployment user
+while preserving root's current directory; uv configuration discovery failed
+before the deployment helpers were installed. Local configuration-discovery
+reproduction confirmed the same permission error and its resolution.
+
+Bootstrap now changes into `/srv/helios` before service-user commands and uses
+`uv --no-config` for the standalone Python installation. For already-uploaded old
+scripts, rerunning from `/tmp` is the documented recovery. Ubuntu bootstrap
+completion and the first successful deployment still need confirmation.

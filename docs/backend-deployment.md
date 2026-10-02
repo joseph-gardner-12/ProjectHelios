@@ -89,7 +89,7 @@ From the repository on your Mac, upload the reviewed deployment assets:
 ```sh
 ssh -i ~/.ssh/helios_ed25519 root@"$HELIOS_IP" 'mkdir -p /root/helios-bootstrap'
 scp -i ~/.ssh/helios_ed25519 -r deploy root@"$HELIOS_IP":/root/helios-bootstrap/
-ssh -i ~/.ssh/helios_ed25519 root@"$HELIOS_IP" 'bash /root/helios-bootstrap/deploy/bootstrap.sh'
+ssh -i ~/.ssh/helios_ed25519 root@"$HELIOS_IP" 'cd /tmp && bash /root/helios-bootstrap/deploy/bootstrap.sh'
 ```
 
 Bootstrap installs PostgreSQL 16 (Ubuntu's package), Redis, Caddy, uv 0.11.16,
@@ -99,6 +99,21 @@ not print those secrets. Reruns retain the environment file, database, SSH keys,
 and operator-modified Caddy configuration; service units and helper scripts are
 updated from the uploaded assets. Run only on a **dedicated Helios Droplet**:
 bootstrap tunes PostgreSQL and Redis for this server and restarts them.
+
+If an older bootstrap copy fails to open `/root/uv.toml` with `Permission denied`,
+its deployment-user process inherited root's private working directory. As root
+on the Droplet, rerun it from a directory the service accounts can access:
+
+```sh
+cd /tmp
+bash /root/helios-bootstrap/deploy/bootstrap.sh
+```
+
+The current bootstrap changes into `/srv/helios` before switching users and
+disables uv configuration discovery for the standalone Python installation.
+Keep `/root` private; changing its permissions is unnecessary. Confirm bootstrap
+prints `Bootstrap complete` and both `/usr/local/bin/helios-deploy` and
+`/usr/local/bin/helios-backup` exist before retrying deployment.
 
 The backend unit is enabled but starts only after the first release. A daily backup
 timer is enabled. The runtime user cannot write application files. The deployment

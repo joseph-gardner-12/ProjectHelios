@@ -2,10 +2,10 @@ name: Backend checks and deployment
 
 on:
   pull_request:
-    paths: ['apps/backend/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
+    paths: ['apps/backend/**', 'apps/localization/**', 'contracts/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
   push:
     branches: [main]
-    paths: ['apps/backend/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
+    paths: ['apps/backend/**', 'apps/localization/**', 'contracts/**', 'deploy/**', '.github/workflows/backend.yml', 'package.json']
   workflow_dispatch:
 
 permissions:
@@ -49,9 +49,13 @@ jobs:
         with:
           version: '0.11.16'
           enable-cache: true
-          cache-dependency-glob: apps/backend/uv.lock
+          cache-dependency-glob: |
+            apps/backend/uv.lock
+            apps/localization/uv.lock
       - name: Install locked dependencies
-        run: uv sync --locked --project apps/backend
+        run: |
+          uv sync --locked --project apps/backend
+          uv sync --locked --project apps/localization
       - name: Lint, check migrations, and test PostgreSQL/Redis
         run: |
           uv run --locked --project apps/backend ruff check apps/backend
@@ -59,6 +63,8 @@ jobs:
           uv run --locked --project apps/backend python apps/backend/manage.py makemigrations --check --dry-run
           uv run --locked --project apps/backend python apps/backend/manage.py migrate --noinput
           uv run --locked --project apps/backend python apps/backend/manage.py test apps/backend
+          uv run --locked --project apps/localization ruff check apps/localization
+          uv run --locked --project apps/localization pytest apps/localization/tests
       - name: Validate production settings and static collection
         env:
           DJANGO_SETTINGS_MODULE: config.settings.production

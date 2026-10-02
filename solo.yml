@@ -1,0 +1,45 @@
+name: Project Helios
+icon: null
+processes:
+  "PostgreSQL":
+    command: pnpm solo:postgres
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  "Redis":
+    command: pnpm solo:redis
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  "Backend":
+    command: pnpm solo:backend
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  "Control worker":
+    command: pnpm solo:control
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  "Frontend":
+    command: pnpm solo:frontend
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}
+  "Dummy localization":
+    command: pnpm solo:localization
+    working_dir: null
+    auto_start: true
+    auto_restart: false
+    restart_when_changed: []
+    env: {}

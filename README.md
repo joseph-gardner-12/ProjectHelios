@@ -9,8 +9,8 @@ uv manages Python dependencies and the backend virtual environment.
 ```text
 apps/
   frontend/   React + TypeScript + Vite
-  backend/    Django + SQLite, managed with uv
-  localization/  Dock-side Python localization service scaffold, managed with uv
+  backend/    Django + PostgreSQL, managed with uv
+  localization/  Dock-side Python runtime with backend-connected dummy mode, managed with uv
 ```
 
 The workspace also reserves `libs/*` for future shared JavaScript/TypeScript packages.
@@ -28,35 +28,41 @@ Python dependencies belong in `apps/backend/pyproject.toml`, not package.json.
 
 ## Quick start
 
-Install Node.js 24+ (the `.nvmrc` selects 24), pnpm 11.2.2, and uv.
-The backend pins Python 3.14; uv can download it if it is not installed.
+Install Node.js 24+, pnpm 11.2.2, uv, PostgreSQL 16, and Redis.
+On macOS, install the services with `brew install postgresql@16 redis`.
+The backend pins Python 3.14; uv can download it if needed.
 
 ```sh
-pnpm install
-pnpm setup
+pnpm install --frozen-lockfile
+```
+
+**Solo (like Staccato Music):** add this repository folder to Solo and load/trust
+`solo.yml`. Start all processes for separate database, Redis, backend, worker,
+frontend, and dummy localization panes. Setup, migrations, and local credentials
+are handled automatically.
+
+**Terminal alternative:**
+
+```sh
 pnpm dev
 ```
 
-Open http://projecthelios.localhost. Portless maps this hostname to Vite on port 5173,
-matching Staccato Music's HTTP development proxy setup. Django runs at http://127.0.0.1:8000.
-The frontend proxies `/api` to Django; `/api/health/` returns a JSON health response.
-Ctrl+C stops both development servers. Ports are fixed so conflicts fail visibly.
-
-`pnpm dev` and `pnpm dev:web` ensure the Portless proxy and hostname alias are ready.
-The shared proxy stays running when the apps stop. Its first start on port 80 may
-prompt for administrator access. The setup preserves other projects' aliases.
-Direct access at http://localhost:5173 also works.
+Open http://127.0.0.1:5173/control. Sign in with a Clemson-format email and
+`SeniorDesign`. Ctrl+C stops all six services; local data is kept in ignored
+`.helios/dev/`. Use either Solo or `pnpm dev`, not both simultaneously.
+See [control setup](docs/control-setup.md) for manual checks and Pi setup.
 
 ## Development and production
 
 | Environment | Website | Routing configuration |
 | --- | --- | --- |
-| Local development | `http://projecthelios.localhost` (or `http://localhost:5173`) | Portless alias in `package.json`; SPA fallback and local API proxy in `apps/frontend/vite.config.ts` |
+| Local development | `http://127.0.0.1:5173` | SPA fallback and local API/WebSocket proxy in `apps/frontend/vite.config.ts` |
 | Production | `https://projecthelios.dev` (currently redirects to `https://www.projecthelios.dev`) | Vercel domain settings and `apps/frontend/vercel.json` |
 
-For local development, run `pnpm dev` or `pnpm dev:web`. Direct links such as
-`http://projecthelios.localhost/control` are served by Vite's SPA fallback.
-The `.localhost` URLs refer to the computer running the development servers.
+Solo and `pnpm dev` start the complete local control stack. For frontend-only
+work, `pnpm dev:web` also registers the optional Portless hostname
+`http://projecthelios.localhost`. Its first proxy start may require administrator
+access. The `.localhost` URLs refer to your own computer.
 
 For production, set the Vercel project's **Root Directory** to `apps/frontend`.
 The configuration there selects Vite, runs `pnpm run build`, and publishes `dist`.
@@ -73,8 +79,8 @@ editing local files does not update the live site.
 A sitemap is separate from routing: it lists canonical production URLs for search
 engines. It must not include `.localhost` URLs and does not fix direct-link 404s.
 
-`pnpm setup` installs backend dependencies and applies migrations to a local,
-ignored SQLite database. No external database service is needed for this starter.
+`pnpm setup` installs dependencies for isolated component work. The complete
+Solo and `pnpm dev` workflows use their own local PostgreSQL and Redis processes.
 Commit both `pnpm-lock.yaml` and `apps/backend/uv.lock` when changing dependencies.
 For reproducible installs, use `pnpm install --frozen-lockfile` and
 `uv sync --locked --project apps/backend`.
@@ -83,7 +89,9 @@ For reproducible installs, use `pnpm install --frozen-lockfile` and
 
 | Command | Purpose |
 | --- | --- |
-| `pnpm dev` | Start both apps |
+| `pnpm dev` | Start and configure the complete local stack |
+| `pnpm pi:setup` | Save standalone Pi connection settings once |
+| `pnpm pi` | Start the configured dummy Pi client |
 | `pnpm setup:portless` | Start the HTTP proxy and register projecthelios.localhost |
 | `pnpm dev:web` | Start only the frontend |
 | `pnpm dev:backend` | Start only Django |
@@ -93,16 +101,17 @@ For reproducible installs, use `pnpm install --frozen-lockfile` and
 | `pnpm check` | TypeScript, frontend/backend lint, Django checks and backend tests |
 | `pnpm build` | Type-check and build the frontend |
 | `pnpm setup:localization` | Install the localization environment and dev tools |
-| `pnpm localization:simulate` | Reserved simulation command; implementation pending |
+| `pnpm localization:simulate` | Run backend-connected dummy telemetry |
 | `pnpm localization:replay` | Reserved replay command; implementation pending |
 | `pnpm localization:run` | Reserved hardware runtime command; implementation pending |
-| `pnpm test:localization` | Run pytest; exits 5 until localization tests are added |
+| `pnpm test:localization` | Run localization protocol and dummy runtime tests |
 | `pnpm lint:localization` | Lint the localization scaffold |
 
-Localization is currently structure-only and is not included in `pnpm dev`,
-`pnpm setup`, or `pnpm check`. Its Python modules are empty; simulation, replay,
-and hardware commands will fail until the CLI is implemented. See the
-[localization guide](docs/localization.md) for details.
+Localization dependencies and tests are included in `pnpm setup` and `pnpm check`.
+Solo and `pnpm dev` include the dummy client and control lifecycle worker.
+Real hardware and replay
+commands remain unimplemented. See [control setup](docs/control-setup.md) and the
+[localization README](apps/localization/README.md) for the dummy milestone.
 
 Add frontend packages with `pnpm --filter @project-helios/frontend add <package>`.
 Add root development tools with `pnpm add -Dw <package>`.
@@ -114,7 +123,7 @@ the frontend remains on Vercel. Deployment assets and GitHub Actions are include
 but provisioning, DNS, SSH secrets, and live verification require the
 [manual setup steps](docs/backend-deployment.md). `/api/health/` checks the process;
 `/api/ready/` checks PostgreSQL/SQLite and Redis and returns 503 if Redis is not configured.
-No public application WebSocket endpoints or device/command features exist yet.
+Authenticated device/browser WebSockets, a five-minute control queue, and durable commands are implemented. See [control setup](docs/control-setup.md) for credentials, Redis, and dummy runtime configuration.
 
 Tooling references: [pnpm workspaces](https://pnpm.io/workspaces),
 [Vite](https://vite.dev/guide/), and [Django](https://docs.djangoproject.com/en/6.0/).

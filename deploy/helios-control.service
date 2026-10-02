@@ -1,0 +1,26 @@
+[Unit]
+Description=Helios control queue and command lifecycle
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+PartOf=helios.service
+
+[Service]
+Type=simple
+User=helios-app
+Group=helios-app
+WorkingDirectory=/srv/helios/current/apps/backend
+EnvironmentFile=/etc/helios/backend.env
+EnvironmentFile=/srv/helios/current/release.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/srv/helios/current/apps/backend/.venv/bin/python manage.py control_worker
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+UMask=0027
+
+[Install]
+WantedBy=helios.service

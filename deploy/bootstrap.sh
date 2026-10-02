@@ -26,10 +26,13 @@ chown helios-deploy:helios-deploy /home/helios-deploy/.ssh/authorized_keys
 chmod 0600 /home/helios-deploy/.ssh/authorized_keys
 install -d -o root -g helios-deploy -m 0750 /etc/helios
 
+# runuser preserves the current directory. Leave root's private working directory
+# before running uv or PostgreSQL commands under their service accounts.
+cd /srv/helios
 python3 -m venv /opt/helios/tools
 /opt/helios/tools/bin/pip install --disable-pip-version-check 'uv==0.11.16'
 runuser -u helios-deploy -- env UV_PYTHON_INSTALL_DIR=/opt/helios/python \
-    UV_CACHE_DIR=/var/cache/helios-uv /opt/helios/tools/bin/uv python install 3.14
+    UV_CACHE_DIR=/var/cache/helios-uv /opt/helios/tools/bin/uv --no-config python install 3.14
 
 systemctl enable --now postgresql redis-server
 if [[ ! -e /etc/helios/backend.env ]]; then
@@ -96,6 +99,7 @@ EOF
 chmod 0440 /etc/sudoers.d/helios-deploy
 visudo -cf /etc/sudoers.d/helios-deploy
 install -m 0644 "$source_dir/helios.service" /etc/systemd/system/helios.service
+install -m 0644 "$source_dir/helios-control.service" /etc/systemd/system/helios-control.service
 install -m 0644 "$source_dir/helios-backup.service" /etc/systemd/system/helios-backup.service
 install -m 0644 "$source_dir/helios-backup.timer" /etc/systemd/system/helios-backup.timer
 
@@ -117,7 +121,7 @@ MaxRetentionSec=7day
 EOF
 systemctl restart systemd-journald
 systemctl daemon-reload
-systemctl enable helios.service
+systemctl enable helios.service helios-control.service
 systemctl enable --now helios-backup.timer
 echo 'Bootstrap complete. Add the deployment public key, configure DNS and GitHub secrets, then deploy.'
 echo 'The backend starts after the first successful release. Existing secrets and data were preserved.'

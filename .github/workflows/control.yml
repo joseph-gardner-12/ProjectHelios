@@ -1,0 +1,59 @@
+name: Control browser acceptance
+on:
+  pull_request:
+    paths: ['apps/frontend/**', 'apps/backend/**', 'apps/localization/**', 'contracts/**', 'scripts/control-e2e.py', 'pnpm-lock.yaml', 'package.json', '.github/workflows/control.yml']
+  push:
+    branches: [main]
+    paths: ['apps/frontend/**', 'apps/backend/**', 'apps/localization/**', 'contracts/**', 'scripts/control-e2e.py', 'pnpm-lock.yaml', 'package.json', '.github/workflows/control.yml']
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: helios_control_e2e
+          POSTGRES_USER: helios
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U helios -d helios_control_e2e"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      POSTGRES_HOST: 127.0.0.1
+      POSTGRES_PORT: '5432'
+      POSTGRES_DB: helios_control_e2e
+      POSTGRES_USER: helios
+      POSTGRES_PASSWORD: ci-only-password
+      REDIS_URL: redis://127.0.0.1:6379/0
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          version: '0.11.16'
+      - run: npm install --global pnpm@11.2.2
+      - run: pnpm install --frozen-lockfile
+      - run: uv sync --locked --project apps/backend && uv sync --locked --project apps/localization
+      - run: pnpm --filter @project-helios/frontend exec playwright install --with-deps chromium
+      - run: pnpm typecheck && pnpm lint:frontend && pnpm test:frontend && pnpm build
+      - run: uv run --locked --project apps/backend python scripts/control-e2e.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: control-acceptance
+          path: |
+            output/control-*.json
+            output/control-*.png
+            apps/frontend/test-results/

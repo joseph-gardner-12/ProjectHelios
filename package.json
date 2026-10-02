@@ -8,7 +8,7 @@
     "pnpm": ">=11 <12"
   },
   "scripts": {
-    "setup": "pnpm run setup:portless && pnpm run setup:backend",
+    "setup": "pnpm run setup:portless && pnpm run setup:backend && pnpm run setup:localization",
     "setup:portless": "portless proxy start --no-tls && portless alias projecthelios 5173",
     "setup:backend": "uv sync --project apps/backend && pnpm run backend:migrate",
     "setup:localization": "uv sync --locked --project apps/localization",
@@ -17,7 +17,7 @@
     "localization:run": "uv run --locked --project apps/localization helios-localization run",
     "test:localization": "uv run --locked --project apps/localization pytest -c apps/localization/pyproject.toml apps/localization/tests",
     "lint:localization": "uv run --locked --project apps/localization ruff check apps/localization",
-    "dev": "concurrently --kill-others --names backend,frontend \"pnpm run dev:backend\" \"pnpm run dev:web\"",
+    "dev": "uv run --locked --project apps/backend python scripts/dev.py",
     "dev:backend": "uv run --project apps/backend python apps/backend/manage.py runserver 127.0.0.1:8000",
     "dev:web": "pnpm run setup:portless && pnpm --filter @project-helios/frontend dev",
     "dev:frontend": "pnpm run dev:web",
@@ -27,12 +27,22 @@
     "build": "pnpm run build:frontend",
     "build:frontend": "pnpm --filter @project-helios/frontend build",
     "typecheck": "pnpm --filter @project-helios/frontend typecheck",
-    "lint": "pnpm run lint:frontend && pnpm run lint:backend",
+    "lint": "pnpm run lint:frontend && pnpm run lint:backend && pnpm run lint:localization",
     "lint:frontend": "pnpm --filter @project-helios/frontend lint",
     "lint:backend": "uv run --project apps/backend ruff check apps/backend",
     "check:backend": "pnpm run backend:manage check",
     "test:backend": "pnpm run backend:manage test apps/backend --settings=config.settings.test",
-    "check": "pnpm run typecheck && pnpm run lint && pnpm run check:backend && pnpm run test:backend"
+    "check": "pnpm run typecheck && pnpm run lint && pnpm run check:backend && pnpm run test:backend && pnpm run test:frontend && pnpm run test:localization",
+    "test:frontend": "pnpm --filter @project-helios/frontend test",
+    "dev:control-worker": "uv run --project apps/backend python apps/backend/manage.py control_worker",
+    "pi": "uv run --locked --project apps/localization helios-localization simulate",
+    "pi:setup": "uv run --locked --project apps/localization helios-localization configure",
+    "solo:postgres": "uv run --locked --project apps/backend python scripts/dev.py --service postgres",
+    "solo:redis": "uv run --locked --project apps/backend python scripts/dev.py --service redis",
+    "solo:backend": "uv run --locked --project apps/backend python scripts/dev.py --service backend",
+    "solo:control": "uv run --locked --project apps/backend python scripts/dev.py --service control",
+    "solo:frontend": "uv run --locked --project apps/backend python scripts/dev.py --service frontend",
+    "solo:localization": "uv run --locked --project apps/backend python scripts/dev.py --service localization"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
