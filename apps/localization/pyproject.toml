@@ -3,7 +3,9 @@ name = "project-helios-localization"
 version = "0.1.0"
 description = "Project Helios dock-side localization service scaffold"
 requires-python = ">=3.14,<3.15"
-dependencies = []
+dependencies = [
+    "websockets>=15,<17",
+]
 
 [project.scripts]
 helios-localization = "helios_localization.__main__:main"
