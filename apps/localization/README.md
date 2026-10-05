@@ -27,6 +27,12 @@ Then start it with:
 pnpm pi
 ```
 
+The terminal shows each sent position (5 times per second, with X/Y/Z in meters),
+received targets, sent acknowledgments and arrivals, and connection events.
+To also save the output, run `pnpm pi 2>&1 | tee /tmp/helios-pi.log`.
+With `pnpm dev`, follow the same output using
+`tail -f .helios/dev/logs/localization.log`; in Solo, open **Dummy localization**.
+
 The setup prompts for the WSS URL, device UUID, and credential-file path. It saves
 settings to `~/.config/helios/localization.json` with mode 0600. Override the config
 location with `HELIOS_CONFIG_FILE`; CLI options and `HELIOS_*` environment variables

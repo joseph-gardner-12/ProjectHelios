@@ -58,8 +58,19 @@ async def connection(url, credential, device_id, frame_version, coordinator):
                 if data["type"] == "heartbeat":
                     heartbeat_at = time.monotonic()
                 elif data["type"] == "target":
+                    log.info(
+                        "Received target command=%r target=%r",
+                        data.get("command_id"),
+                        data.get("target"),
+                    )
                     acknowledgment, candidate = coordinator.prepare(data, datetime.now(UTC))
                     await send(acknowledgment)
+                    log.info(
+                        "Sent acknowledgment command=%r accepted=%s reason=%r",
+                        acknowledgment["command_id"],
+                        acknowledgment["accepted"],
+                        acknowledgment.get("reason"),
+                    )
                     coordinator.start(candidate, time.monotonic())
                 else:
                     raise ValueError("Unexpected setup")
@@ -73,9 +84,21 @@ async def connection(url, credential, device_id, frame_version, coordinator):
                 if now - heartbeat_at >= 5:
                     raise TimeoutError("Backend heartbeat expired")
                 coordinator.tick(now)
-                await send({**coordinator.telemetry(), "sequence": sequence})
+                telemetry = coordinator.telemetry()
+                await send({**telemetry, "sequence": sequence})
+                position = telemetry["position"]
+                log.info(
+                    "Sent position sequence=%d x=%.3f y=%.3f z=%.3f m state=%s command=%r",
+                    sequence,
+                    position["x"],
+                    position["y"],
+                    position["z"],
+                    telemetry["state"],
+                    telemetry["command_id"],
+                )
                 if coordinator.completed_id and coordinator.completed_id != last_completed:
                     await send({"type": "arrival", "command_id": coordinator.completed_id})
+                    log.info("Sent arrival command=%r", coordinator.completed_id)
                     last_completed = coordinator.completed_id
                 sequence += 1
                 await asyncio.sleep(0.2)
