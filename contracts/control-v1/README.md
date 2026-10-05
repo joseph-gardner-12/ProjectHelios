@@ -13,7 +13,7 @@ Coordinates are dock-relative east/north/up metres: X east, Y north, Z up.
 between 0 and 3.048 metres. The browser converts feet once at the API boundary
 using 0.3048 metres per foot and does not round wire coordinates.
 
-Every WebSocket message has `version: 1`, `type`, `device_id`, `connection_id`,
+Every admitted-session WebSocket message has `version: 1`, `type`, `device_id`, `connection_id`,
 `frame_version`, and an ISO 8601 timestamp with timezone. UUIDs identify devices,
 connections, commands, requests, and control leases. Browser snapshots may have
 a null connection ID when the device is offline. Message size is limited to 8 KiB
@@ -22,7 +22,14 @@ on the Pi socket. Credentials are bearer headers, never URL parameters.
 ## Exchange
 
 1. Pi authenticates at `/ws/v1/pi/` with `Authorization: Bearer <id>.<secret>`.
-2. Backend sends `setup` with a new connection ID and `telemetry_hz: 5`.
+2. Backend atomically claims one backend-wide computer slot, then sends `setup`
+   with a new connection ID and `telemetry_hz: 5`. If the slot is occupied, the
+   authenticated socket receives `{"version":1,"type":"error",
+   "code":"machine_already_connected","message":"..."}` and closes with 4409.
+   This error precedes admission and has no device/connection envelope. It must
+   terminate the CLI with exit status 3; it never replaces the incumbent.
+   A transient setup failure instead uses `backend_unavailable` and close 1011,
+   which may be retried. Invalid credentials are denied during the handshake.
 3. Pi sends `ready`, then an idle `position`. Only advancing sequence numbers
    refresh position freshness. Idle telemetry continues at 5 Hz.
 4. A session-authenticated browser watches `/ws/v1/devices/{device_id}/`.
@@ -57,8 +64,7 @@ connection presence expires after five seconds. Dummy speed is 0.5 m/s; arrival
 requires 0.01 m tolerance for 0.5 seconds. Execution times out after 30 seconds.
 These are demonstration defaults, not physical flight qualification limits.
 
-Redis stores transient positions and presence. PostgreSQL stores requests and
-queue decisions. Missing Redis state blocks control. Command delivery is an
+Redis stores transient positions and presence. PostgreSQL stores requests, queue decisions, and the computer admission lease. Missing Redis state blocks control. Command delivery is an
 at-most-once dispatch attempt after commit, with duplicate command handling on
 the Pi; it is not an exactly-once delivery guarantee. A crash after persistence
 can leave an unconfirmed command. Recovery invalidates that connection and never
@@ -83,3 +89,22 @@ cannot send. Released places do not automatically rejoin. An email cannot hold
 multiple places or transfer its active place to a different session. Server
 transactions and database constraints enforce these rules, including concurrent
 requests from multiple processes.
+
+## Computer enrollment and compatibility
+
+`POST /api/v1/machines/register/` accepts JSON `name` and `password`, using the
+shared registration password configured in Django admin. It does not use browser
+session authentication or CSRF cookies. Success returns HTTP 201 with
+`machine_id`, `name`, `credential`, `device_id`, `frame_version`, and
+`websocket_path`. The CLI builds WSS on the same trusted backend origin and saves
+the credential privately. Registration does not acquire the connection slot.
+
+The original device UUID and bearer credentials remain valid. A separate Machine
+record gives each old credential a legacy name without altering its secret.
+Disabling a Machine prevents authentication and closes its connection within the
+normal heartbeat check (one second). Connection close 4401 means rejected or
+revoked credentials (terminal CLI status 4); close 4410 means an expired or
+invalidated connection that may reconnect idle. The global slot expires after
+five seconds without valid client traffic. Delayed old disconnects or messages
+cannot release or modify a newer connection. The browser ControlLease remains
+independent of this slot.

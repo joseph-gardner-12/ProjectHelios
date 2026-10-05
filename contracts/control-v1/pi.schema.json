@@ -369,6 +369,35 @@
           ]
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "code",
+        "message"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "error"
+        },
+        "code": {
+          "enum": [
+            "machine_already_connected",
+            "backend_unavailable"
+          ]
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        }
+      }
     }
   ]
 }

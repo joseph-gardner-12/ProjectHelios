@@ -6,6 +6,7 @@ from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 from redis.exceptions import RedisError
 
@@ -154,3 +155,29 @@ def command(request, device_id, command_id=None):
             request_id=request.GET["request_id"], session_key=request.session.session_key
         )
     return JsonResponse({"command": services.command_json(result)})
+
+
+@csrf_exempt  # CLI endpoint uses an explicit registration secret, never browser cookies.
+@require_POST
+@api
+def register_machine(request):
+    if request.content_type != "application/json":
+        raise services.ControlError("Use application/json", 415)
+    address = request.META.get("REMOTE_ADDR", "unknown")
+    if settings.SECURE_PROXY_SSL_HEADER:
+        address = request.META.get("HTTP_X_FORWARDED_FOR", address).split(",")[-1].strip()
+    key = f"{settings.CONTROL_REDIS_PREFIX}:register:{hashlib.sha256(address.encode()).hexdigest()}"
+    count = presence.client().eval(
+        "local n=redis.call('INCR',KEYS[1]); "
+        "if n==1 then redis.call('EXPIRE',KEYS[1],300) end; return n",
+        1,
+        key,
+    )
+    if count > 20:
+        raise services.ControlError(
+            "Too many registration attempts; try again in five minutes", 429
+        )
+    result = services.register_machine(request.data.get("name"), request.data.get("password"))
+    response = JsonResponse(result, status=201)
+    response["Cache-Control"] = "no-store"
+    return response

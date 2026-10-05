@@ -90,7 +90,7 @@ For reproducible installs, use `pnpm install --frozen-lockfile` and
 | Command | Purpose |
 | --- | --- |
 | `pnpm dev` | Start and configure the complete local stack |
-| `pnpm pi:setup` | Save standalone Pi connection settings once |
+| `pnpm pi:setup` | Register this computer using its name and the shared registration password |
 | `pnpm pi` | Start the configured dummy Pi client |
 | `pnpm setup:portless` | Start the HTTP proxy and register projecthelios.localhost |
 | `pnpm dev:web` | Start only the frontend |

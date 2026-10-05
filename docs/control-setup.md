@@ -39,9 +39,13 @@ settings rather than inheriting production database or API destinations.
 PostgreSQL data persists across stops; Redis presence does not. A newly started
 dummy process begins at the origin and never resumes an old target.
 
-For a separately running Pi, run `pnpm pi:setup` once to save its backend URL,
-provisioned device ID, and credential-file path. Then start it with `pnpm pi`.
-That configuration is separate from the automatically provisioned laptop demo.
+For a separately running computer, run `pnpm pi:setup` once. Enter a computer
+name and the shared registration password; the production backend URL and
+connection settings are handled automatically. Then start it with `pnpm pi`.
+The password is set in Django admin under **Computer registration settings**.
+This configuration is separate from the automatically provisioned local demo.
+Only one computer can connect to the backend at a time; a second exits with a
+readable error without disconnecting the active computer.
 
 ## Manual check
 
@@ -103,11 +107,34 @@ on the server, deploy the updated backend, then run
 `systemctl enable --now helios-control.service`. Inspect startup with
 `journalctl -u helios-control.service -n 50 --no-pager`.
 
-Provision the production device using the production backend environment. Set
-`CONTROL_DEMO_DEVICE_ID` and `CONTROL_PASSWORD_HASH` in `/etc/helios/backend.env`
-and restart the backend and worker. Provision the Pi credential directly into a
-restricted file and transfer it securely to the service account on the Pi.
-Use `deploy/helios-localization.service` as described in the localization README.
+After deploying these migrations and restarting the backend/worker, open
+`https://api.projecthelios.dev/admin/control/registrationsettings/1/change/` and
+set the shared registration password. Keep registration enabled, then save.
+Students can now use `pnpm pi:setup` without server access. The browser demo
+password and the computer registration password are separate settings.
+
+The existing device and credentials are preserved: migration 0003 adds a named
+legacy computer for each credential without changing its UUID, secret hash,
+revocation status, or device association. Existing config files and environment
+variables keep working. Rename the legacy computer under **Machines** in admin
+if desired; do not create a replacement Device or rerun setup on that computer.
+New computers use the configured `CONTROL_DEMO_DEVICE_ID`, or the sole enabled
+Device when that setting is absent. Ambiguous or missing devices block enrollment.
+Changing the registration password does not revoke existing computer credentials.
+
+Update the old computer's checkout/client to get terminal conflict handling.
+An old client still authenticates but its old reconnect loop will keep retrying
+when blocked; the backend will never let it take over an occupied slot. The normal
+backend deployment restarts Daphne and drops existing sockets, which reconnect
+using the preserved credential. Do not run old and new backend versions together
+for this policy change: old application code still implements replacement.
+
+Migration 0002 creates new tables only; 0003 backfills computer metadata. Neither
+rewrites nor replaces existing Device or DeviceCredential records. Normal GitHub
+backend deployment applies migrations and restarts services. No SSH is needed to
+set the registration password or register subsequent computers. The Pi systemd
+unit must be updated separately if used; its conflict/authentication exit codes
+are excluded from automatic restart. See the localization README for service setup.
 
 The frontend defaults to `https://api.projecthelios.dev` in production. Optional
 `VITE_API_ORIGIN` overrides both HTTP and WebSocket origins. Keep the allowed

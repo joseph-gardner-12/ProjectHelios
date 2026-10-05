@@ -234,6 +234,32 @@ class ControlIntegrationTests(TransactionTestCase):
         self.assertCountEqual(outcomes, ["accepted", "blocked"])
         self.assertEqual(Command.objects.count(), 1)
 
+    def test_concurrent_computers_admit_exactly_one(self):
+        if connection.vendor != "postgresql":
+            self.skipTest("PostgreSQL row locks required")
+        from threading import Barrier
+
+        services.disconnect(self.device.id, self.connection_id)
+        other_device = Device.objects.create(name="Different logical device")
+        other = services.authenticate_pi(services.issue_credential(other_device))
+        barrier = Barrier(2)
+
+        def connect(credential_id):
+            close_old_connections()
+            try:
+                barrier.wait(timeout=5)
+                services.connect_pi(credential_id, f"race.{credential_id}")
+                return "accepted"
+            except services.MachineAlreadyConnected:
+                return "blocked"
+            finally:
+                close_old_connections()
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            outcomes = list(executor.map(connect, [self.credential.id, other.id]))
+        self.assertCountEqual(outcomes, ["accepted", "blocked"])
+        self.assertEqual(Device.objects.exclude(connection_id=None).count(), 1)
+
     def test_login_csrf_and_exact_domain(self):
         client = Client(enforce_csrf_checks=True)
         self.assertEqual(

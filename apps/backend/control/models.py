@@ -91,3 +91,44 @@ class Command(models.Model):
                 name="one_active_command",
             ),
         ]
+
+
+class Machine(models.Model):
+    """One independently revocable computer; legacy credentials retain their identity."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    credential = models.OneToOneField(DeviceCredential, on_delete=models.CASCADE)
+    name = models.CharField(max_length=100)
+    enabled = models.BooleanField(default=True)
+    legacy = models.BooleanField(default=False, editable=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    last_connected_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class RegistrationSettings(models.Model):
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    enabled = models.BooleanField(default=True)
+    password_hash = models.CharField(max_length=255, blank=True)
+
+    class Meta:
+        verbose_name_plural = "Computer registration settings"
+        constraints = [models.CheckConstraint(condition=Q(id=1), name="registration_singleton")]
+
+    def __str__(self):
+        return "Computer registration"
+
+
+class ConnectionSlot(models.Model):
+    """Backend-wide admission lease, independent of browser control turns."""
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    device_id = models.UUIDField(null=True)
+    credential_id = models.UUIDField(null=True)
+    connection_id = models.UUIDField(null=True)
+    expires_at = models.DateTimeField(null=True)
+
+    class Meta:
+        constraints = [models.CheckConstraint(condition=Q(id=1), name="connection_singleton")]

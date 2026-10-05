@@ -2,6 +2,7 @@ import asyncio
 import os
 import uuid
 from unittest import skipUnless
+from unittest.mock import patch
 
 from channels.db import database_sync_to_async
 from channels.testing import WebsocketCommunicator
@@ -47,7 +48,7 @@ class SocketTests(TransactionTestCase):
         self.assertFalse((await viewer.connect())[0])
         await viewer.disconnect()
 
-    async def test_target_ack_and_replacement(self):
+    async def test_target_ack_and_conflict(self):
         pi = self.pi()
         self.assertTrue((await pi.connect())[0])
         setup = await pi.receive_json_from()
@@ -88,11 +89,18 @@ class SocketTests(TransactionTestCase):
             state = await viewer.receive_json_from()
         replacement = self.pi()
         self.assertTrue((await replacement.connect())[0])
-        new_setup = await replacement.receive_json_from()
-        self.assertNotEqual(new_setup["connection_id"], setup["connection_id"])
-        close = await pi.receive_output()
+        error = await replacement.receive_json_from()
+        self.assertEqual(error["code"], "machine_already_connected")
+        close = await replacement.receive_output()
         self.assertEqual(close["type"], "websocket.close")
         self.assertEqual(close["code"], 4409)
+        # The first connection and accepted command stay intact.
+        from .models import Command
+
+        active = await database_sync_to_async(Command.objects.get)(pk=command["id"])
+        self.assertEqual(active.status, "accepted")
+        device = await database_sync_to_async(Device.objects.get)(pk=self.device.id)
+        self.assertEqual(str(device.connection_id), setup["connection_id"])
         await replacement.disconnect()
         await pi.disconnect()
         await viewer.disconnect()
@@ -123,3 +131,44 @@ class SocketTests(TransactionTestCase):
                     break
         self.assertEqual(result["code"], 4401)
         await viewer.disconnect()
+
+    async def test_transient_admission_failure_is_not_auth_rejection(self):
+        pi = self.pi()
+        with patch("control.services.connect_pi", side_effect=ConnectionError):
+            with self.assertLogs("control.consumers", level="ERROR"):
+                self.assertTrue((await pi.connect())[0])
+                error = await pi.receive_json_from()
+            self.assertEqual(error["code"], "backend_unavailable")
+            self.assertEqual((await pi.receive_output())["code"], 1011)
+        await pi.disconnect()
+
+    async def test_disabling_machine_closes_live_socket(self):
+        from .models import Machine
+
+        pi = self.pi()
+        await pi.connect()
+        await pi.receive_json_from()
+        await database_sync_to_async(Machine.objects.filter(credential__device=self.device).update)(
+            enabled=False
+        )
+        result = await pi.receive_output(timeout=3)
+        self.assertEqual(result["type"], "websocket.close")
+        self.assertEqual(result["code"], 4401)
+        await pi.disconnect()
+
+    async def test_disabled_machine_sending_telemetry_gets_terminal_error(self):
+        from .models import Machine
+
+        pi = self.pi()
+        await pi.connect()
+        setup = await pi.receive_json_from()
+        await database_sync_to_async(Machine.objects.filter(credential__device=self.device).update)(
+            enabled=False
+        )
+        await pi.send_json_to(
+            {**{k: v for k, v in setup.items() if k != "telemetry_hz"}, "type": "ready"}
+        )
+        result = await pi.receive_output(timeout=3)
+        self.assertEqual(result["type"], "websocket.close")
+        self.assertEqual(result["code"], 4401)
+        await pi.disconnect()

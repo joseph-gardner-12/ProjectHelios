@@ -36,8 +36,31 @@ class PiConsumer(AsyncJsonWebsocketConsumer):
             await self.accept()
             await self.send_json(setup)
             self.task = asyncio.create_task(self.heartbeat())
+        except services.MachineAlreadyConnected as exc:
+            # Preaccept close becomes HTTP 403, losing the application close reason.
+            await self.accept()
+            await self.send_json(
+                {
+                    "version": 1,
+                    "type": "error",
+                    "code": "machine_already_connected",
+                    "message": str(exc),
+                }
+            )
+            await self.close(code=4409)
         except Exception:
             log.exception("Pi setup failed")
+            if self.connection_id is None:
+                # Do not turn a transient admission failure into an HTTP 403 auth rejection.
+                await self.accept()
+                await self.send_json(
+                    {
+                        "version": 1,
+                        "type": "error",
+                        "code": "backend_unavailable",
+                        "message": "Backend temporarily unavailable. Try again.",
+                    }
+                )
             await self.close(code=1011)
 
     async def heartbeat(self):
@@ -48,7 +71,8 @@ class PiConsumer(AsyncJsonWebsocketConsumer):
                     self.device_id, self.connection_id, self.credential_id
                 )
                 if not message:
-                    await self.close(code=4401)
+                    allowed = await call(services.credential_allowed)(self.credential_id)
+                    await self.close(code=4410 if allowed else 4401)
                     return
                 await self.send_json(message)
         except asyncio.CancelledError:
@@ -68,7 +92,10 @@ class PiConsumer(AsyncJsonWebsocketConsumer):
     async def receive_json(self, content, **kwargs):
         try:
             await call(services.receive_pi)(self.device_id, self.connection_id, content)
-        except ValueError, TypeError, KeyError, services.ControlError:
+        except services.ControlError:
+            allowed = await call(services.credential_allowed)(self.credential_id)
+            await self.close(code=4410 if allowed else 4401)
+        except ValueError, TypeError, KeyError:
             await self.close(code=4400)
         except Exception:
             log.exception("Pi receive failed device=%s", self.device_id)
@@ -80,7 +107,8 @@ class PiConsumer(AsyncJsonWebsocketConsumer):
                 self.device_id, self.connection_id, self.credential_id
             )
             if not valid:
-                await self.close(code=4401)
+                allowed = await call(services.credential_allowed)(self.credential_id)
+                await self.close(code=4410 if allowed else 4401)
                 return
             message = await call(services.dispatch_message)(
                 self.device_id, self.connection_id, event["command_id"]
@@ -91,7 +119,8 @@ class PiConsumer(AsyncJsonWebsocketConsumer):
             await self.close(code=1011)
 
     async def replaced(self, event):
-        await self.close(code=4409)
+        allowed = await call(services.credential_allowed)(self.credential_id)
+        await self.close(code=4410 if allowed else 4401)
 
     async def disconnect(self, code):
         if self.task:

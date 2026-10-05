@@ -8,11 +8,35 @@ import time
 from datetime import UTC, datetime
 
 from websockets.asyncio.client import connect
+from websockets.exceptions import ConnectionClosed, InvalidStatus
 
 from .coordinator import CommandCoordinator
 from .protocol import validate
 
 log = logging.getLogger(__name__)
+
+
+class TerminalConnectionError(Exception):
+    def __init__(self, message, exit_status=4):
+        super().__init__(message)
+        self.exit_status = exit_status
+
+
+def terminal_error(exc):
+    if isinstance(exc, TerminalConnectionError):
+        return exc
+    if isinstance(exc, BaseExceptionGroup):
+        for child in exc.exceptions:
+            if error := terminal_error(child):
+                return error
+    if (isinstance(exc, InvalidStatus) and exc.response.status_code in {401, 403}) or (
+        isinstance(exc, ConnectionClosed) and exc.rcvd and exc.rcvd.code == 4401
+    ):
+        return TerminalConnectionError(
+            "Computer credential rejected or disabled. Ask the administrator, "
+            "then run pnpm pi:setup --force if a new registration is needed."
+        )
+    return None
 
 
 async def connection(url, credential, device_id, frame_version, coordinator):
@@ -25,9 +49,20 @@ async def connection(url, credential, device_id, frame_version, coordinator):
         ping_interval=2,
         ping_timeout=5,
     ) as socket:
-        setup = validate(
-            json.loads(await asyncio.wait_for(socket.recv(), 5)), device_id, frame_version
-        )
+        first = json.loads(await asyncio.wait_for(socket.recv(), 5))
+        if (
+            isinstance(first, dict)
+            and first.get("version") == 1
+            and first.get("type") == "error"
+            and first.get("code") == "machine_already_connected"
+        ):
+            message = first.get("message")
+            if not isinstance(message, str) or not message or len(message) > 512:
+                message = "Cannot start: another computer is already connected."
+            raise TerminalConnectionError(message, exit_status=3)
+        if isinstance(first, dict) and first.get("code") == "backend_unavailable":
+            raise ConnectionError("Backend temporarily unavailable")
+        setup = validate(first, device_id, frame_version)
         if setup["type"] != "setup":
             raise ValueError("Expected setup")
         connection_id = setup["connection_id"]
@@ -123,6 +158,8 @@ async def run(url, credential_file, device_id, frame_version):
             raise
         except Exception as exc:
             coordinator.reset()
+            if error := terminal_error(exc):
+                raise error from None
             # Exception text from networking libraries may contain headers; log only the type.
             log.warning("Connection interrupted (%s); target cleared", type(exc).__name__)
         if time.monotonic() - started > 10:

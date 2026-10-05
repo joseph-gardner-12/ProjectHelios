@@ -14,7 +14,17 @@ from django.db import transaction
 from django.utils import timezone
 
 from . import presence
-from .models import Command, ControlLease, Device, DeviceCredential, DevicePermission, QueueEntry
+from .models import (
+    Command,
+    ConnectionSlot,
+    ControlLease,
+    Device,
+    DeviceCredential,
+    DevicePermission,
+    Machine,
+    QueueEntry,
+    RegistrationSettings,
+)
 from .protocol import ACTIVE, coordinates, identifier, validate_message
 
 log = logging.getLogger(__name__)
@@ -324,10 +334,69 @@ def submit(device_id, user, session_key, data):
     return command_json(command), True
 
 
-def issue_credential(device):
+class MachineAlreadyConnected(ControlError):
+    def __init__(self, name):
+        super().__init__(
+            f"Cannot start: “{name}” is already connected. Stop that program, then try again."
+        )
+
+
+def machine_for(credential):
+    # Covers credentials issued by old code between migration and service restart.
+    machine, _ = Machine.objects.get_or_create(
+        credential=credential,
+        defaults={
+            "name": f"{credential.device.name[:70]} (legacy {str(credential.id)[:8]})",
+            "legacy": True,
+        },
+    )
+    return machine
+
+
+@transaction.atomic
+def issue_credential(device, machine_name=None):
     secret = secrets.token_urlsafe(32)
     credential = DeviceCredential.objects.create(device=device, secret_hash=make_password(secret))
+    if machine_name is None:
+        machine_for(credential)
+    else:
+        Machine.objects.create(credential=credential, name=machine_name)
     return f"{credential.id}.{secret}"
+
+
+@transaction.atomic
+def register_machine(name, password):
+    if not isinstance(name, str) or not name.strip() or len(name.strip()) > 100:
+        raise ControlError("Computer name must contain 1–100 characters", 400)
+    if any(ord(char) < 32 or ord(char) == 127 for char in name):
+        raise ControlError("Computer name cannot contain control characters", 400)
+    if not isinstance(password, str) or not password or len(password) > 256:
+        raise ControlError("Incorrect registration password", 401)
+    registration, _ = RegistrationSettings.objects.get_or_create(pk=1)
+    registration = RegistrationSettings.objects.select_for_update().get(pk=registration.pk)
+    if not registration.enabled or not registration.password_hash:
+        raise ControlError("Computer registration is disabled or has not been configured", 403)
+    if not check_password(password, registration.password_hash):
+        raise ControlError("Incorrect registration password", 401)
+    from django.conf import settings
+
+    devices = Device.objects.filter(enabled=True)
+    if settings.CONTROL_DEMO_DEVICE_ID:
+        devices = devices.filter(pk=settings.CONTROL_DEMO_DEVICE_ID)
+    candidates = list(devices[:2])
+    if len(candidates) != 1:
+        raise ControlError("The Helios control device is not configured", 503)
+    device = candidates[0]
+    token = issue_credential(device, name.strip())
+    machine = Machine.objects.get(credential_id=token.split(".", 1)[0])
+    return {
+        "machine_id": str(machine.id),
+        "name": machine.name,
+        "credential": token,
+        "device_id": str(device.id),
+        "frame_version": device.frame_version,
+        "websocket_path": "/ws/v1/pi/",
+    }
 
 
 def authenticate_pi(token):
@@ -336,26 +405,62 @@ def authenticate_pi(token):
         credential = DeviceCredential.objects.select_related("device").get(
             pk=identifier(key), revoked_at=None, device__enabled=True
         )
-        return credential if check_password(secret, credential.secret_hash) else None
+        if check_password(secret, credential.secret_hash) and machine_for(credential).enabled:
+            return credential
     except ValueError, DeviceCredential.DoesNotExist:
-        return None
+        pass
+    return None
+
+
+def credential_allowed(credential_id):
+    return DeviceCredential.objects.filter(
+        pk=credential_id, revoked_at=None, device__enabled=True, machine__enabled=True
+    ).exists()
+
+
+def locked_slot():
+    # Call inside atomic(), before locking any Device row. A single row serializes all starts.
+    ConnectionSlot.objects.get_or_create(pk=1)
+    return ConnectionSlot.objects.select_for_update().get(pk=1)
 
 
 def connect_pi(credential_id, channel_name):
-    credential = DeviceCredential.objects.get(
-        pk=credential_id, revoked_at=None, device__enabled=True
-    )
     with transaction.atomic():
+        slot = locked_slot()
+        credential = DeviceCredential.objects.select_related("device").get(
+            pk=credential_id, revoked_at=None, device__enabled=True, machine__enabled=True
+        )
+        now = timezone.now()
+        if slot.connection_id:
+            incumbent = Device.objects.select_for_update().filter(pk=slot.device_id).first()
+            if (
+                incumbent
+                and incumbent.connection_id == slot.connection_id
+                and slot.expires_at
+                and slot.expires_at > now
+            ):
+                owner = Machine.objects.filter(credential_id=slot.credential_id).first()
+                raise MachineAlreadyConnected(owner.name if owner else incumbent.name)
+            if incumbent and incumbent.connection_id == slot.connection_id:
+                invalidate(incumbent, "Connection expired")
         device = Device.objects.select_for_update().get(pk=credential.device_id)
-        invalidate(device, "Connection replaced")
+        # Redis must be available before granting admission; missing data is not ownership.
+        presence.read(device.id)
+        invalidate(device, "Connection expired")
         device.connection_id = uuid.uuid4()
         device.channel_name = channel_name
         changed(device)
+        slot.device_id = device.id
+        slot.credential_id = credential.id
+        slot.connection_id = device.connection_id
+        slot.expires_at = now + timedelta(seconds=5)
+        slot.save()
+        Machine.objects.filter(credential=credential).update(last_connected_at=now)
         presence.write(
             device.id,
             {
                 "connection_id": str(device.connection_id),
-                "received_at": timezone.now().timestamp(),
+                "received_at": now.timestamp(),
                 "sequence": -1,
                 "ready": False,
                 "position_at": 0,
@@ -381,7 +486,7 @@ def check_connection(device_id, connection_id, credential_id):
         valid = (
             str(device.connection_id) == str(connection_id)
             and DeviceCredential.objects.filter(
-                pk=credential_id, device=device, revoked_at=None
+                pk=credential_id, device=device, revoked_at=None, machine__enabled=True
             ).exists()
             and live(device, state, timezone.now())
         )
@@ -412,6 +517,7 @@ def dispatch_message(device_id, connection_id, command_id):
 
 def receive_pi(device_id, connection_id, data):
     with transaction.atomic():
+        slot = locked_slot()
         device = Device.objects.select_for_update().get(pk=device_id)
         if str(device.connection_id) != str(connection_id):
             raise ControlError("Superseded connection")
@@ -420,6 +526,18 @@ def receive_pi(device_id, connection_id, data):
         now = timezone.now()
         if not live(device, state, now):
             raise ControlError("Presence expired")
+        if (
+            str(slot.connection_id) != str(connection_id)
+            or not slot.expires_at
+            or slot.expires_at <= now
+        ):
+            raise ControlError("Connection slot expired")
+        if not DeviceCredential.objects.filter(
+            pk=slot.credential_id, revoked_at=None, machine__enabled=True
+        ).exists():
+            raise ControlError("Computer disabled or credential revoked")
+        slot.expires_at = now + timedelta(seconds=5)
+        slot.save(update_fields=["expires_at"])
         state["received_at"] = now.timestamp()
         kind = data["type"]
         if kind == "ready":
