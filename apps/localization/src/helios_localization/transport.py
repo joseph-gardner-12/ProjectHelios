@@ -39,7 +39,7 @@ def terminal_error(exc):
     return None
 
 
-async def connection(url, credential, device_id, frame_version, coordinator):
+async def connection(url, credential, device_id, frame_version, coordinator, *, on_connected=None):
     coordinator.reset()
     async with connect(
         url,
@@ -66,6 +66,8 @@ async def connection(url, credential, device_id, frame_version, coordinator):
         if setup["type"] != "setup":
             raise ValueError("Expected setup")
         connection_id = setup["connection_id"]
+        if on_connected:
+            on_connected()
 
         async def send(data):
             await socket.send(
@@ -151,9 +153,17 @@ async def run(url, credential_file, device_id, frame_version):
     delay = 1
     while True:
         started = time.monotonic()
+        established = False
+
+        def connected():
+            nonlocal established
+            established = True
+
         try:
             credential = credential_file.read_text().strip()
-            await connection(url, credential, device_id, frame_version, coordinator)
+            await connection(
+                url, credential, device_id, frame_version, coordinator, on_connected=connected
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:
@@ -164,5 +174,8 @@ async def run(url, credential_file, device_id, frame_version):
             log.warning("Connection interrupted (%s); target cleared", type(exc).__name__)
         if time.monotonic() - started > 10:
             delay = 1
-        await asyncio.sleep(random.uniform(delay / 2, delay))
+        # A stopped backend may not run disconnect cleanup. Its admission lease
+        # lasts five seconds after the last frame; let it expire before retrying
+        # so our own stale lease isn't reported as a terminal machine conflict.
+        await asyncio.sleep((5 if established else 0) + random.uniform(delay / 2, delay))
         delay = min(30, delay * 2)

@@ -179,3 +179,29 @@ def test_force_setup_can_repair_malformed_saved_config(tmp_path, monkeypatch):
     monkeypatch.setattr(cli, "configure", setup)
     cli.main()
     setup.assert_called_once_with(config, registration.DEFAULT_BACKEND, True)
+
+
+def test_established_connection_waits_for_lease_before_reconnecting(tmp_path, monkeypatch):
+    credential = tmp_path / "credential"
+    credential.write_text("private-secret")
+    attempts = 0
+    sleeps = []
+
+    async def connection(*args, on_connected=None):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            if on_connected:
+                on_connected()
+            raise ConnectionError("Backend restarted")
+        raise transport.TerminalConnectionError("stop", 3)
+
+    async def sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(transport, "connection", connection)
+    monkeypatch.setattr(transport.asyncio, "sleep", sleep)
+    with pytest.raises(transport.TerminalConnectionError):
+        asyncio.run(transport.run("ws://127.0.0.1", credential, str(uuid.uuid4()), "dummy-enu-v1"))
+    assert attempts == 2
+    assert len(sleeps) == 1 and sleeps[0] >= 5
