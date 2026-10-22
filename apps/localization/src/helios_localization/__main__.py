@@ -7,7 +7,6 @@ import uuid
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from .ranging import DEFAULT_BAUDRATE, DEFAULT_PORT, record_range_reports
 from .registration import DEFAULT_BACKEND, configure
 from .transport import TerminalConnectionError, run
 
@@ -44,21 +43,6 @@ def main():
     simulate.add_argument("--credential-file", type=Path)
     simulate.add_argument("--device-id")
     simulate.add_argument("--frame-version")
-    record_ranges = commands.add_parser(
-        "record-ranges", help="Record automatic MaUWB range reports from a USB collector"
-    )
-    record_ranges.add_argument("--port", default=DEFAULT_PORT, help="Collector serial port")
-    record_ranges.add_argument(
-        "--baud", type=int, default=DEFAULT_BAUDRATE, help="Collector serial baud rate"
-    )
-    record_ranges.add_argument(
-        "--output", type=Path, default=Path("a4-range-reports.jsonl"), help="JSON Lines output"
-    )
-    record_ranges.add_argument(
-        "--echo",
-        action="store_true",
-        help="Print active ranges as JSON anchor-ID-to-centimetre mappings",
-    )
     commands.add_parser("run", help="Hardware runtime (not implemented)")
     commands.add_parser("replay", help="Recorded ranging replay (not implemented)")
     args = parser.parse_args()
@@ -67,13 +51,6 @@ def main():
             configure(config_path(), args.backend, args.force)
         except (OSError, ValueError, EOFError) as exc:
             parser.error(str(exc))
-        return
-    if args.command == "record-ranges":
-        logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
-        try:
-            record_range_reports(args.port, args.output, baudrate=args.baud, echo=args.echo)
-        except KeyboardInterrupt:
-            pass
         return
     if args.command != "simulate":
         parser.error("Hardware and replay modes are not implemented; no dummy fallback")
