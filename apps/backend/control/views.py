@@ -82,7 +82,8 @@ def sign_in(request):
     if not request.user.is_authenticated or request.user.pk != user.pk:
         login(request, user)
     DevicePermission.objects.get_or_create(device=device, user=user)
-    services.join(device.id, user, request.session.session_key)
+    if device.frame_version == "dummy-enu-v1":
+        services.join(device.id, user, request.session.session_key)
     return JsonResponse({**session_data(request), "device_id": str(device.id)})
 
 

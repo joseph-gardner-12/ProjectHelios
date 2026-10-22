@@ -1,8 +1,8 @@
 # Control protocol version 1
 
 This protocol carries dummy targets and telemetry between the browser, Django,
-and the localization application's `simulate` runtime. It does not control an
-actual aircraft. The JSON schemas in this directory describe Pi messages,
+and the localization application's `simulate` runtime, plus read-only measured
+observations from `run`. It does not control an actual aircraft. The JSON schemas in this directory describe Pi messages,
 browser snapshots, and HTTP target requests. The shared coordinate fixtures run
 against all three implementations.
 
@@ -108,3 +108,46 @@ invalidated connection that may reconnect idle. The global slot expires after
 five seconds without valid client traffic. Delayed old disconnects or messages
 cannot release or modify a newer connection. The browser ControlLease remains
 independent of this slot.
+
+## Measurement-only sessions
+
+A Device configured with a surveyed frame (any nonempty frame other than
+`dummy-enu-v1`) admits only `ready` with `capability: "measurement"`. Capability
+cannot change during a connection. Such sessions cannot join the control queue,
+receive targets, send dummy positions, or acquire movement authority. Existing
+dummy messages remain compatible.
+
+The Pi sends `observation` with the normal envelope, increasing `sequence`,
+`source: "uwb" | "synthetic"`, and an `observation` object:
+
+- `kind`: `measured`, `predicted`, or `invalid`.
+- `session`: estimator identity, changing on controller/range reset or reinitialization.
+- `estimated_time`, `measurement_time`: UTC sample times; the latter is nullable before initialization.
+- `prediction_age_s`: elapsed time since correction, nullable before initialization.
+- `position`: signed ENU metres, or null when invalid.
+- `covariance`: symmetric positive-semidefinite 3×3 ENU position covariance in m², or null when invalid.
+- `timing_sigma_s`: acquisition/alignment uncertainty.
+- `reason`: rejection reason when invalid, otherwise null.
+
+Measured results have zero prediction age. Predicted results must remain within
+100 ms of the last correction. Invalid results cannot contain coordinates or
+covariance. Snapshot `capability`, `observation`, and `source` convey this state;
+`can_send` is always false. A last-known position may remain visible after an
+invalid result, explicitly marked stale.
+
+Measurement freshness uses the original correction time plus the 100-ms bench
+budget minus timing uncertainty. Neither a new wire sequence nor a live connection
+refreshes this age. Dummy freshness remains two seconds. Dashboard traffic stays
+at 5 Hz; expiry before the next update is expected. Cloud UTC comparisons assume
+the Pi and backend clocks are synchronized; future timestamps beyond 50 ms are
+rejected. Local estimator durations use monotonic clocks and continue without
+cloud access. Reconnection retains only current local estimates, never commands.
+
+### Optional UWB diagnostics on a dummy session
+
+Dummy `position` telemetry and browser snapshots may include
+`simulated_localization: {frame, observation}`. This is synthetic sensor output
+from the waypoint-driven dummy's position, separate from its ground-truth
+`position`. It never grants command authority or changes freshness of the dummy
+command stream. Real measurement sessions remain read-only. The browser places
+these diagnostics beneath the original waypoint workspace.

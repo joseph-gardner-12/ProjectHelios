@@ -29,3 +29,37 @@ describe('shared browser message fixtures', () => {
     })
   }
 })
+
+describe('measurement observations', () => {
+  const measured = {
+    kind: 'measured', session: 'capture:fc:1', estimated_time: '2026-10-21T12:00:00Z',
+    measurement_time: '2026-10-21T12:00:00Z', prediction_age_s: 0,
+    position: { x: -1, y: 2, z: .5 }, covariance: [[.01, 0, 0], [0, .01, 0], [0, 0, .02]],
+    timing_sigma_s: .01, reason: null,
+  }
+  const snapshot = {
+    version: 1, type: 'snapshot', device_id: 'test', connection_id: 'connection',
+    frame_version: 'survey-enu-v1', timestamp: '2026-10-21T12:00:00Z', revision: 1, sequence: 1,
+    health: 'fresh', position: measured.position, position_at: 1792584000,
+    source: 'uwb', capability: 'measurement', observation: measured, command: null, can_send: false,
+    queue: { position: null, joined: false, controller: false, lease_id: null, expires_at: null, releasing: false },
+  }
+  it('accepts signed coordinates with measured source identity', () => {
+    expect(parseSnapshot(JSON.stringify(snapshot)).position?.x).toBe(-1)
+  })
+  it('accepts flagged short predictions', () => {
+    expect(parseSnapshot(JSON.stringify({ ...snapshot, observation: { ...measured,
+      kind: 'predicted', estimated_time: '2026-10-21T12:00:00.050Z', prediction_age_s: .05 } })).observation?.kind).toBe('predicted')
+  })
+  it('rejects movement authority and predictions beyond the bound', () => {
+    expect(() => parseSnapshot(JSON.stringify({ ...snapshot, can_send: true }))).toThrow()
+    expect(() => parseSnapshot(JSON.stringify({ ...snapshot, observation: { ...measured,
+      kind: 'predicted', estimated_time: '2026-10-21T12:00:00.200Z', prediction_age_s: .2 } }))).toThrow()
+  })
+  it('accepts an invalid result without presenting it as a measurement', () => {
+    const invalid = parseSnapshot(JSON.stringify({ ...snapshot, health: 'stale', observation: {
+      ...measured, kind: 'invalid', position: null, covariance: null, reason: 'altitude_stale',
+    } }))
+    expect(invalid.observation?.position).toBeNull()
+  })
+})

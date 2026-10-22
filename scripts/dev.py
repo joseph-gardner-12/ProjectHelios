@@ -69,7 +69,7 @@ def ready(url):
         return response.status == 200
 
 
-def prepare_device():
+def prepare_device(uwb=False):
     # Django is imported only after this launcher has forced its isolated local environment.
     sys.path.insert(0, str(ROOT / "apps/backend"))
     import django
@@ -82,14 +82,17 @@ def prepare_device():
     from django.db import connections
 
     call_command("migrate", verbosity=0)
-    profile = STATE / "device.json"
-    credential_path = STATE / "pi.credential"
+    profile = STATE / ("uwb-waypoint-device.json" if uwb else "device.json")
+    credential_path = STATE / ("uwb-waypoint.credential" if uwb else "pi.credential")
     saved = json.loads(profile.read_text()) if profile.exists() else {}
     device = (
         Device.objects.filter(pk=saved.get("id")).first() if saved.get("id") else None
     )
     if not device:
-        device = Device.objects.create(name="Local dummy Pi")
+        device = Device.objects.create(
+            name="Synthetic UWB · noisy ranges and dropouts" if uwb else "Local dummy Pi",
+            frame_version="dummy-enu-v1",
+        )
         profile.write_text(json.dumps({"id": str(device.id)}) + "\n")
         profile.chmod(0o600)
     credential = (
@@ -110,7 +113,7 @@ def prepare_device():
             "HELIOS_DEVICE_ID": str(device.id),
             "HELIOS_CREDENTIAL_FILE": str(credential_path),
             "HELIOS_BACKEND_WS": "ws://127.0.0.1:8000/ws/v1/pi/",
-            "HELIOS_FRAME_VERSION": "dummy-enu-v1",
+            "HELIOS_FRAME_VERSION": device.frame_version,
         }
     )
     connections.close_all()
@@ -281,7 +284,10 @@ def main():
         "--service",
         choices=("postgres", "redis", "backend", "control", "frontend", "localization"),
     )
+    parser.add_argument("--uwb", action="store_true", help="Run real UWB solver with synthetic sensors")
     args = parser.parse_args()
+    if args.uwb and args.service:
+        parser.error("--uwb starts the complete stack; omit --service")
     if args.service:
         run_service(args.service)
         return
@@ -324,6 +330,7 @@ def main():
         postgres, initdb = postgres_bin("postgres"), postgres_bin("initdb")
         for port in (15432, 16379, 8000, 5173):
             with socket.socket() as probe:
+                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
                 try:
                     probe.bind(("127.0.0.1", port))
                 except OSError as exc:
@@ -400,7 +407,7 @@ def main():
                 database.execute(
                     sql.SQL("CREATE DATABASE {} ").format(sql.Identifier("helios_dev"))
                 )
-        device_id = prepare_device()
+        device_id = prepare_device(uwb=args.uwb)
         start(
             "backend",
             [sys.executable, "manage.py", "runserver", "127.0.0.1:8000"],
@@ -421,7 +428,9 @@ def main():
         )
         start(
             "localization",
-            [str(ROOT / "apps/localization/.venv/bin/helios-localization"), "simulate"],
+            [str(ROOT / "apps/localization/.venv/bin/helios-localization"),
+             *(["simulate-uwb", "--survey", str(ROOT / "apps/localization/configs/survey.example.toml")]
+               if args.uwb else ["simulate"])],
         )
         wait_for(lambda: ready("http://127.0.0.1:5173/control"), processes, "frontend")
         from control import presence
@@ -431,7 +440,7 @@ def main():
             return (
                 state
                 and state.get("sequence", -1) >= 2
-                and state.get("source_timestamp")
+                and (state.get("simulated_localization") if args.uwb else state.get("source_timestamp"))
             )
 
         wait_for(telemetry, processes, "dummy telemetry")

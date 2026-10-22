@@ -3,6 +3,7 @@ import { ControlSession } from '../control/ControlSession'
 import { useControl } from '../control/useControl'
 import { toFeet } from '../control/api'
 import type { PointerEvent } from 'react'
+import { LocalizationDetails } from '../control/LocalizationDetails'
 import './control.css'
 
 type Position = { x: number; y: number; z: number }
@@ -100,6 +101,7 @@ export default function ControlPage() {
 
         </section>
       </div>
+      <LocalizationDetails control={control} />
     </div>
   )
 }

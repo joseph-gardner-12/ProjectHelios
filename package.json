@@ -17,6 +17,7 @@
     "localization:run": "uv run --locked --project apps/localization helios-localization run",
     "test:localization": "uv run --locked --project apps/localization pytest -c apps/localization/pyproject.toml apps/localization/tests",
     "lint:localization": "uv run --locked --project apps/localization ruff check apps/localization",
+    "dev:uwb": "uv run --locked --project apps/backend python scripts/dev.py --uwb",
     "dev": "uv run --locked --project apps/backend python scripts/dev.py",
     "dev:backend": "uv run --project apps/backend python apps/backend/manage.py runserver 127.0.0.1:8000",
     "dev:web": "pnpm run setup:portless && pnpm --filter @project-helios/frontend dev",

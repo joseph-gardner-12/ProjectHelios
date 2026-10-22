@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { useControl } from './useControl'
+import type { Snapshot } from './api'
 
 type Control = ReturnType<typeof useControl>
 const statuses: Record<string, string> = {
@@ -21,18 +22,31 @@ function SignInForm({ control }: { control: Control }) {
   </form>
 }
 
+const sourceLabels = { dummy: 'Dummy telemetry', uwb: 'UWB localization', synthetic: 'Synthetic localization' }
+
+function turnDescription(queue: Snapshot['queue'] | undefined, wallClock: number, measuring: boolean) {
+  if (measuring) return 'Read-only localization'
+  if (queue?.controller) {
+    const seconds = queue.expires_at ? Math.max(0, Math.ceil((Date.parse(queue.expires_at) - wallClock) / 1000)) : 0
+    const turn = `Your turn · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} remaining`
+    return queue.releasing ? `${turn} · Releasing after current target` : turn
+  }
+  return queue?.joined ? `Waiting · Queue position ${queue.position ?? '…'}` : 'Watching · Not queued'
+}
+
 function QueueStatus({ control }: { control: Control }) {
   const queue = control.snapshot?.queue
-  const seconds = queue?.expires_at ? Math.max(0, Math.ceil((Date.parse(queue.expires_at) - control.wallClock) / 1000)) : 0
-  let turn = 'Watching · Not queued'
-  if (queue?.controller) {
-    turn = `Your turn · ${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')} remaining`
-    if (queue.releasing) turn += ' · Releasing after current target'
-  } else if (queue?.joined) turn = `Waiting · Queue position ${queue.position ?? '…'}`
+  const measuring = control.snapshot?.capability === 'measurement'
+  const turn = turnDescription(queue, control.wallClock, measuring)
+  const connectionStatus = control.fresh ? 'Live' : control.connected ? 'Stale / device offline' : 'Disconnected'
   return <section className="control-status" aria-label="Connection and control status">
-    <p>{control.session?.email} <span>· Dummy telemetry · {control.fresh ? 'Live' : control.connected ? 'Stale / device offline' : 'Disconnected'}</span></p>
+    <p>{control.session?.email} <span>· {sourceLabels[control.snapshot?.source ?? 'dummy']} · {connectionStatus}</span></p>
+    {control.devices.length > 1 && <label>Device <select value={control.device ?? ''} disabled={control.busy || control.unresolved}
+      onChange={event => control.selectDevice(event.target.value)}>
+      {control.devices.map(device => <option key={device.id} value={device.id}>{device.name}</option>)}
+    </select></label>}
     <p>{turn}</p>
-    <div><button disabled={control.busy} onClick={() => void control.queue(!queue?.joined)}>{queue?.joined ? 'Leave / release turn' : 'Rejoin queue'}</button><button disabled={control.busy} onClick={() => void control.logout()}>Sign out</button></div>
+    <div>{!measuring && <button disabled={control.busy} onClick={() => void control.queue(!queue?.joined)}>{queue?.joined ? 'Leave / release turn' : 'Rejoin queue'}</button>}<button disabled={control.busy} onClick={() => void control.logout()}>Sign out</button></div>
   </section>
 }
 
@@ -40,9 +54,9 @@ export function ControlSession({ control }: { control: Control }) {
   const command = control.command
   return <>
     {control.session?.authenticated ? <QueueStatus control={control} /> : <SignInForm control={control} />}
-    <p className="control-detail" role="status" aria-label="Command status">{command
+    {control.snapshot?.capability !== 'measurement' && <p className="control-detail" role="status" aria-label="Command status">{command
       ? `Command: ${statuses[command.status] ?? command.status}${command.reason ? ` — ${command.reason}` : ''}`
-      : 'No target submitted'}</p>
+      : 'No target submitted'}</p>}
     {control.error && <p className="control-error" role="alert">{control.error}</p>}
   </>
 }

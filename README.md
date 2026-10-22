@@ -102,10 +102,10 @@ For reproducible installs, use `pnpm install --frozen-lockfile` and
 | `pnpm build` | Type-check and build the frontend |
 | `pnpm setup:localization` | Install the localization environment and dev tools |
 | `pnpm localization:simulate` | Run backend-connected dummy telemetry |
-| `pnpm localization:replay` | Reserved replay command; implementation pending |
-| `pnpm localization:run` | Reserved hardware runtime command; implementation pending |
-| `pnpm test:localization` | Run localization protocol and dummy runtime tests |
-| `pnpm lint:localization` | Lint the localization scaffold |
+| `pnpm localization:replay` | Replay recorded ranges and aircraft samples offline |
+| `pnpm localization:run` | Run measurement-only UWB capture and estimation |
+| `pnpm test:localization` | Run localization protocol, estimator, replay and runtime tests |
+| `pnpm lint:localization` | Lint the localization application |
 
 Localization dependencies and tests are included in `pnpm setup` and `pnpm check`.
 Solo and `pnpm dev` include the dummy client and control lifecycle worker.

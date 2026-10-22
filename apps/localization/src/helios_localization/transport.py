@@ -148,8 +148,8 @@ async def connection(url, credential, device_id, frame_version, coordinator, *, 
             coordinator.reset()
 
 
-async def run(url, credential_file, device_id, frame_version):
-    coordinator = CommandCoordinator()
+async def run(url, credential_file, device_id, frame_version, *, coordinator=None):
+    coordinator = coordinator or CommandCoordinator()
     delay = 1
     while True:
         started = time.monotonic()

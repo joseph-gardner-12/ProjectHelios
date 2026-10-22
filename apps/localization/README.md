@@ -2,7 +2,10 @@
 
 The localization application now includes a backend-connected dummy runtime.
 It runs on a laptop or Raspberry Pi without ranging or flight hardware.
-USB range recording is implemented; replay and flight-controller integration remain unimplemented.
+A separate measurement-only runtime now supports documented MaUWB AT reports,
+nonlinear correction, bounded prediction, recording/replay, and optional disarmed
+external-navigation bench output. Hardware qualification remains pending. See
+[measurement setup](../../docs/localization.md) for survey configuration and commands.
 
 ## Record UWB range reports
 
@@ -82,9 +85,9 @@ valid targets, and moves at 0.5 m/s. Disconnection clears the target. A reconnec
 retains only the in-process position and starts idle; a process restart starts
 at the origin. Old targets never resume automatically.
 
-`run` and `replay` fail explicitly rather than falling back to simulation.
-No target is forwarded to aircraft hardware. Future real localization must
-report measurements independently of requested targets.
+`run` uses measured ranges and aircraft altitude; `replay` processes recorded
+sensor input offline. Neither falls back to dummy motion or executes targets.
+External-position bench output is disabled by default and never sends predictions.
 
 ## Tests and Pi service
 
