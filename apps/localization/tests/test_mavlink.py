@@ -86,6 +86,10 @@ def test_real_mavlink2_serial_encoding_and_telemetry_with_pseudoterminal():
 
     from helios_localization.config import load_settings
 
+    if not hasattr(os, "openpty"):
+        import pytest
+
+        pytest.skip("POSIX pseudoterminal test; Windows serial path is exercised with mocks")
     master, slave = os.openpty()
     link = None
     try:

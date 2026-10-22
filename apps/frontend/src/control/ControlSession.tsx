@@ -40,8 +40,19 @@ function QueueStatus({ control }: { control: Control }) {
   const turn = turnDescription(queue, control.wallClock, measuring)
   const connectionStatus = control.fresh ? 'Live' : control.connected ? 'Stale / device offline' : 'Disconnected'
   return <section className="control-status" aria-label="Connection and control status">
-    <p>{control.session?.email} <span>· {sourceLabels[control.snapshot?.source ?? 'dummy']} · {connectionStatus}</span></p>
-    {control.devices.length > 1 && <label>Device <select value={control.device ?? ''} disabled={control.busy || control.unresolved}
+    <p>{control.session?.email} <span>· {sourceLabels[measuring && control.snapshot?.source === 'dummy' ? 'uwb' : control.snapshot?.source ?? 'dummy']} · {connectionStatus}</span></p>
+    {control.uwbSource.enabled && <fieldset className="uwb-source-toggle">
+      <legend>UWB source</legend>
+      {(['simulated', 'real'] as const).map(mode => <button key={mode} type="button"
+        aria-pressed={control.device === control.uwbSource.devices?.[mode]}
+        disabled={control.busy || control.unresolved || ['pending_ack', 'accepted'].includes(control.command?.status ?? '')}
+        onClick={() => void control.switchUwbSource(mode)}>
+        {mode === 'real' ? 'Real UWB · COM5' : 'Simulated UWB'}
+      </button>)}
+      <p>Switching restarts the local reader (about 6 seconds). Real UWB needs the collector connected.
+        An unavailable source stays offline; it never falls back to simulation.</p>
+    </fieldset>}
+    {!control.uwbSource.enabled && control.devices.length > 1 && <label>Device <select value={control.device ?? ''} disabled={control.busy || control.unresolved}
       onChange={event => control.selectDevice(event.target.value)}>
       {control.devices.map(device => <option key={device.id} value={device.id}>{device.name}</option>)}
     </select></label>}

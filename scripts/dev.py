@@ -1,7 +1,6 @@
 """One-command local control stack. All data and credentials stay in .helios/dev."""
 
 import argparse
-import fcntl
 import json
 import os
 import shutil
@@ -14,6 +13,17 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
+from dev_platform import (
+    WINDOWS,
+    acquire_lock,
+    frontend_command,
+    localization_command,
+    redis_binary,
+    spawn_options,
+    stop_process,
+    windows_postgres,
+)
+
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / ".helios/dev"
 
@@ -22,12 +32,14 @@ def postgres_bin(name):
     executable = shutil.which(name)
     if executable:
         return executable
+    if WINDOWS and (executable := windows_postgres(name)):
+        return executable
     pg_config = shutil.which("pg_config")
     if pg_config:
         result = subprocess.run(
             [pg_config, "--bindir"], capture_output=True, text=True, check=True
         )
-        candidate = Path(result.stdout.strip()) / name
+        candidate = Path(result.stdout.strip()) / (name + ".exe" if WINDOWS else name)
         if candidate.is_file():
             return str(candidate)
     for base in (
@@ -37,9 +49,7 @@ def postgres_bin(name):
         candidate = Path(base) / name
         if candidate.is_file():
             return str(candidate)
-    raise RuntimeError(
-        "PostgreSQL is required. On macOS: brew install postgresql@16 redis"
-    )
+    raise RuntimeError("Install PostgreSQL 16 or newer; add its bin directory to PATH")
 
 
 def wait_for(check, processes, label, timeout=40):
@@ -82,15 +92,31 @@ def prepare_device(uwb=False, survey=None):
     from django.db import connections
 
     call_command("migrate", verbosity=0)
-    profile = STATE / ("hardware-device.json" if survey else "uwb-waypoint-device.json" if uwb else "device.json")
-    credential_path = STATE / ("hardware.credential" if survey else "uwb-waypoint.credential" if uwb else "pi.credential")
+    profile = STATE / (
+        "hardware-device.json"
+        if survey
+        else "uwb-waypoint-device.json"
+        if uwb
+        else "device.json"
+    )
+    credential_path = STATE / (
+        "hardware.credential"
+        if survey
+        else "uwb-waypoint.credential"
+        if uwb
+        else "pi.credential"
+    )
     saved = json.loads(profile.read_text()) if profile.exists() else {}
     device = (
         Device.objects.filter(pk=saved.get("id")).first() if saved.get("id") else None
     )
     if not device:
         device = Device.objects.create(
-            name="Real UWB collector" if survey else "Synthetic UWB · noisy ranges and dropouts" if uwb else "Local dummy Pi",
+            name="Real UWB collector"
+            if survey
+            else "Synthetic UWB · noisy ranges and dropouts"
+            if uwb
+            else "Local dummy Pi",
             frame_version=survey["frame"] if survey else "dummy-enu-v1",
         )
         profile.write_text(json.dumps({"id": str(device.id)}) + "\n")
@@ -138,6 +164,7 @@ def local_environment():
             "HELIOS_DEV_BACKEND": "http://127.0.0.1:8000",
             "VITE_API_ORIGIN": "",
             "PYTHONUNBUFFERED": "1",
+            "PYTHONUTF8": "1",
             "pnpm_config_verify_deps_before_run": "false",
         }
     )
@@ -148,11 +175,7 @@ def run_service(name):
     os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True)
     local_environment()
-    lock = (STATE / f"{name}.lock").open("w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        sys.exit(f"The {name} service is already running in this checkout.")
+    lock = acquire_lock(STATE / f"{name}.lock")
     # Keep the service lock through exec so restarting a pane cannot duplicate it.
     os.set_inheritable(lock.fileno(), True)
     if name == "postgres":
@@ -287,8 +310,12 @@ def main():
         "--service",
         choices=("postgres", "redis", "backend", "control", "frontend", "localization"),
     )
-    parser.add_argument("--uwb", action="store_true", help="Run real UWB solver with synthetic sensors")
-    parser.add_argument("--survey", type=Path, help="Real UWB survey TOML; starts hardware tracking")
+    parser.add_argument(
+        "--uwb", action="store_true", help="Run real UWB solver with synthetic sensors"
+    )
+    parser.add_argument(
+        "--survey", type=Path, help="Real UWB survey TOML; starts hardware tracking"
+    )
     args = parser.parse_args()
     if args.survey and (args.uwb or args.service):
         parser.error("--survey cannot be combined with --uwb or --service")
@@ -303,40 +330,48 @@ def main():
         except (OSError, ValueError, TypeError, KeyError) as exc:
             parser.error(str(exc))
         if not hardware_settings.uwb_port or (
-            not hardware_settings.mavlink_port and hardware_settings.fixed_height is None
+            not hardware_settings.mavlink_port
+            and hardware_settings.fixed_height is None
         ):
-            parser.error("Hardware tracking needs uwb_port and MAVLink altitude or fixed_height")
-        survey = {"frame": hardware_settings.frame, "protocol": hardware_settings.protocol,
-                  "external_nav": hardware_settings.external_nav}
-        if survey.get("protocol") != "mauwb-at-v1.1.6" or survey.get("external_nav", False):
-            parser.error("Hardware dashboard requires MaUWB protocol and external_nav=false")
+            parser.error(
+                "Hardware tracking needs uwb_port and MAVLink altitude or fixed_height"
+            )
+        survey = {
+            "frame": hardware_settings.frame,
+            "protocol": hardware_settings.protocol,
+            "external_nav": hardware_settings.external_nav,
+        }
+        if survey.get("protocol") != "mauwb-at-v1.1.6" or survey.get(
+            "external_nav", False
+        ):
+            parser.error(
+                "Hardware dashboard requires MaUWB protocol and external_nav=false"
+            )
     if args.uwb and args.service:
         parser.error("--uwb starts the complete stack; omit --service")
+    if args.service and WINDOWS:
+        parser.error("Use pnpm dev on Windows; individual Solo panes require POSIX")
     if args.service:
         run_service(args.service)
         return
     os.umask(0o077)
     STATE.mkdir(parents=True, exist_ok=True)
     STATE.chmod(0o700)
-    lock = (STATE / "launcher.lock").open("w")
-    try:
-        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except BlockingIOError:
-        sys.exit("Helios development is already running in this checkout.")
+    lock = acquire_lock(STATE / "launcher.lock")
 
     processes = []
     logs = STATE / "logs"
     logs.mkdir(exist_ok=True)
 
-    def start(name, command, cwd=ROOT):
+    def start(name, command, cwd=ROOT, env=None):
         with (logs / f"{name}.log").open("w") as output:
             process = subprocess.Popen(
                 command,
                 cwd=cwd,
-                env=os.environ.copy(),
+                env=env or os.environ.copy(),
                 stdout=output,
                 stderr=subprocess.STDOUT,
-                start_new_session=True,
+                **spawn_options(),
             )
         processes.append((name, process))
         return process
@@ -346,15 +381,15 @@ def main():
 
     signal.signal(signal.SIGTERM, interrupt)
     try:
-        redis = shutil.which("redis-server")
-        if not redis:
-            raise RuntimeError(
-                "Redis is required. On macOS: brew install postgresql@16 redis"
-            )
+        redis = redis_binary()
         postgres, initdb = postgres_bin("postgres"), postgres_bin("initdb")
         for port in (15432, 16379, 8000, 5173):
             with socket.socket() as probe:
-                probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                probe.setsockopt(
+                    socket.SOL_SOCKET,
+                    socket.SO_EXCLUSIVEADDRUSE if WINDOWS else socket.SO_REUSEADDR,
+                    1,
+                )
                 try:
                     probe.bind(("127.0.0.1", port))
                 except OSError as exc:
@@ -368,15 +403,26 @@ def main():
             cwd=ROOT,
             check=True,
         )
-        if not (ROOT / "apps/frontend/node_modules/.bin/vite").exists():
+        if not (ROOT / "apps/frontend/node_modules/vite/bin/vite.js").exists():
             subprocess.run(
-                ["pnpm", "install", "--frozen-lockfile"], cwd=ROOT, check=True
+                [shutil.which("pnpm") or "pnpm", "install", "--frozen-lockfile"],
+                cwd=ROOT,
+                check=True,
             )
         pgdata = STATE / "postgres"
         if not (pgdata / "PG_VERSION").exists():
             with (logs / "initdb.log").open("w") as output:
                 subprocess.run(
-                    [initdb, "-D", str(pgdata), "-A", "trust", "-U", "helios_dev"],
+                    [
+                        initdb,
+                        "-D",
+                        str(pgdata),
+                        "-A",
+                        "trust",
+                        "-U",
+                        "helios_dev",
+                        "--encoding=UTF8",
+                    ],
                     stdout=output,
                     stderr=subprocess.STDOUT,
                     check=True,
@@ -431,7 +477,20 @@ def main():
                 database.execute(
                     sql.SQL("CREATE DATABASE {} ").format(sql.Identifier("helios_dev"))
                 )
+        switch_file = None
+        runtime_envs = {}
+        if survey:
+            simulated_id = prepare_device(uwb=True)
+            runtime_envs["simulated"] = os.environ.copy()
         device_id = prepare_device(uwb=args.uwb, survey=survey)
+        if survey:
+            runtime_envs["real"] = os.environ.copy()
+            switch_file = STATE / "uwb-source.json"
+            switch_file.write_text(json.dumps({"mode": "real"}))
+            os.environ["CONTROL_LOCAL_UWB_FILE"] = str(switch_file)
+            os.environ["CONTROL_LOCAL_UWB_DEVICES"] = json.dumps(
+                {"real": str(device_id), "simulated": str(simulated_id)}
+            )
         start(
             "backend",
             [sys.executable, "manage.py", "runserver", "127.0.0.1:8000"],
@@ -447,18 +506,46 @@ def main():
         )
         start(
             "frontend",
-            [str(ROOT / "apps/frontend/node_modules/.bin/vite"), "--host", "127.0.0.1"],
+            frontend_command(ROOT),
             ROOT / "apps/frontend",
         )
-        start(
-            "localization",
-            [str(ROOT / "apps/localization/.venv/bin/helios-localization"),
-             *(["run", "--survey", str(args.survey), "--cloud",
-                "--record", str(STATE / f"uwb-{time.time_ns()}.jsonl")] if survey else
-               ["simulate-uwb", "--survey", str(ROOT / "apps/localization/configs/survey.example.toml")]
-               if args.uwb else ["simulate"])],
+
+        def start_localization(mode):
+            if mode == "real":
+                arguments = [
+                    "run",
+                    "--survey",
+                    str(args.survey),
+                    "--cloud",
+                    "--record",
+                    str(STATE / f"uwb-{time.time_ns()}.jsonl"),
+                ]
+            elif mode == "simulated":
+                arguments = [
+                    "simulate-uwb",
+                    "--survey",
+                    str(ROOT / "apps/localization/configs/survey.example.toml"),
+                ]
+            else:
+                arguments = ["simulate"]
+            return start(
+                "localization",
+                [*localization_command(ROOT), *arguments],
+                env=runtime_envs.get(mode),
+            )
+
+        mode = "real" if survey else "simulated" if args.uwb else "dummy"
+        localization = start_localization(mode)
+        request_version = switch_file.stat().st_mtime_ns if switch_file else None
+        wait_for(
+            lambda: ready("http://127.0.0.1:5173/control"),
+            [
+                (name, proc)
+                for name, proc in processes
+                if name != "localization" or not survey
+            ],
+            "frontend",
         )
-        wait_for(lambda: ready("http://127.0.0.1:5173/control"), processes, "frontend")
         from control import presence
 
         def telemetry():
@@ -466,22 +553,50 @@ def main():
             return (
                 state
                 and state.get("sequence", -1) >= 2
-                and (state.get("observation") if survey else
-                     state.get("simulated_localization") if args.uwb else state.get("source_timestamp"))
+                and (
+                    state.get("observation")
+                    if survey
+                    else state.get("simulated_localization")
+                    if args.uwb
+                    else state.get("source_timestamp")
+                )
             )
 
-        wait_for(telemetry, processes, "UWB observations" if survey else "dummy telemetry")
+        if not survey or args.check:
+            wait_for(
+                telemetry,
+                processes,
+                "UWB observations" if survey else "dummy telemetry",
+            )
         print(
             "\nHelios is ready: http://127.0.0.1:5173/control\n"
             "Sign in: any @clemson.edu email · Password: SeniorDesign\n"
-            "All six services are running. Logs: .helios/dev/logs/\n"
+            "Dashboard ready. Reader status appears in the UI; logs: .helios/dev/logs/\n"
             "Ctrl+C stops everything; local data is kept.\n",
             flush=True,
         )
         if args.check:
             return
         while True:
+            if switch_file:
+                requested = json.loads(switch_file.read_text())["mode"]
+                if requested not in runtime_envs:
+                    raise RuntimeError("Invalid local UWB mode request")
+                version = switch_file.stat().st_mtime_ns
+                if requested != mode or (
+                    version != request_version and localization.poll() is not None
+                ):
+                    stop_process(localization)
+                    processes.remove(("localization", localization))
+                    # Allow the single-computer admission lease to expire even after a crash.
+                    time.sleep(5.2)
+                    mode = requested
+                    localization = start_localization(mode)
+                request_version = version
+                # Keep the UI available when COM5 is absent/busy so simulation can be selected.
             for name, process in processes:
+                if switch_file and name == "localization":
+                    continue
                 if process.poll() is not None:
                     raise RuntimeError(
                         f"{name} exited. See .helios/dev/logs/{name}.log"
@@ -493,15 +608,24 @@ def main():
         print(f"Helios could not start: {exc}", file=sys.stderr)
         sys.exit(1)
     finally:
-        # Reverse startup order: clients and app processes stop before their dependencies.
-        for _, process in reversed(processes):
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait()
+        # Ignore repeated Ctrl+C while owned children release ports and database files.
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+        for name, process in reversed(processes):
+            if WINDOWS and name == "postgres" and process.poll() is None:
+                subprocess.run(
+                    [
+                        postgres_bin("pg_ctl"),
+                        "-D",
+                        str(STATE / "postgres"),
+                        "stop",
+                        "-m",
+                        "fast",
+                        "-t",
+                        "10",
+                    ],
+                    check=False,
+                )
+            stop_process(process)
         lock.close()
 
 

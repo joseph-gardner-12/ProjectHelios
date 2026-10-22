@@ -8,6 +8,7 @@ urlpatterns = [
     path("login/", views.sign_in),
     path("logout/", views.sign_out),
     path("devices/", views.devices),
+    path("local/uwb-source/", views.local_uwb_source),
     path("devices/<uuid:device_id>/", views.status),
     path("devices/<uuid:device_id>/queue/", views.status),
     path("devices/<uuid:device_id>/queue/join/", views.queue_join),

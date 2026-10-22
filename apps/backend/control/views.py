@@ -1,13 +1,16 @@
 import hashlib
 import json
+import os
+import tempfile
 from functools import wraps
+from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth import authenticate, login, logout
 from django.http import JsonResponse
 from django.middleware.csrf import get_token
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_GET, require_POST
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 from redis.exceptions import RedisError
 
 from . import presence, services
@@ -82,6 +85,8 @@ def sign_in(request):
     if not request.user.is_authenticated or request.user.pk != user.pk:
         login(request, user)
     DevicePermission.objects.get_or_create(device=device, user=user)
+    for local_id in local_uwb_devices().values():
+        DevicePermission.objects.get_or_create(device_id=local_id, user=user)
     if device.frame_version == "dummy-enu-v1":
         services.join(device.id, user, request.session.session_key)
     return JsonResponse({**session_data(request), "device_id": str(device.id)})
@@ -182,3 +187,54 @@ def register_machine(request):
     response = JsonResponse(result, status=201)
     response["Cache-Control"] = "no-store"
     return response
+
+
+def local_uwb_devices():
+    if not getattr(settings, "CONTROL_LOCAL_UWB_FILE", ""):
+        return {}
+    return json.loads(getattr(settings, "CONTROL_LOCAL_UWB_DEVICES", "{}"))
+
+
+@require_http_methods(["GET", "POST"])
+@api
+def local_uwb_source(request):
+    if not request.user.is_authenticated:
+        raise services.ControlError("Sign in required", 401)
+    configured = local_uwb_devices()
+    if set(configured) != {"real", "simulated"}:
+        return JsonResponse({"enabled": False})
+    if request.META.get("REMOTE_ADDR") not in {"127.0.0.1", "::1"}:
+        raise services.ControlError("Local source switching requires loopback", 403)
+    allowed = set(
+        str(value)
+        for value in DevicePermission.objects.filter(user=request.user).values_list(
+            "device_id", flat=True
+        )
+    )
+    if not set(configured.values()) <= allowed:
+        raise services.ControlError("Source access denied; sign in again", 403)
+    destination = Path(settings.CONTROL_LOCAL_UWB_FILE)
+    try:
+        if request.method == "POST":
+            mode = request.data["mode"]
+            if mode not in configured:
+                raise ValueError("Invalid UWB source")
+            if Command.objects.filter(
+                device_id__in=configured.values(), status__in=("pending_ack", "accepted")
+            ).exists():
+                raise services.ControlError("Wait for the active simulated waypoint to finish", 409)
+            # Write atomically; a partial file must not stop the launcher.
+            with tempfile.NamedTemporaryFile(
+                mode="w", dir=destination.parent, delete=False, encoding="utf-8"
+            ) as stream:
+                temporary = stream.name
+                json.dump({"mode": mode}, stream)
+            try:
+                os.replace(temporary, destination)
+            finally:
+                if os.path.exists(temporary):
+                    os.unlink(temporary)
+        mode = json.loads(destination.read_text())["mode"]
+        return JsonResponse({"enabled": True, "mode": mode, "devices": configured})
+    except OSError as exc:
+        raise services.ControlError("Local launcher unavailable", 503) from exc

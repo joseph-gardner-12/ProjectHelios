@@ -21,3 +21,7 @@ CHANNEL_LAYERS = (
 )
 
 CSRF_TRUSTED_ORIGINS = CONTROL_BROWSER_ORIGINS  # noqa: F405
+
+# Only the local launcher enables source switching. Production settings omit these.
+CONTROL_LOCAL_UWB_FILE = os.environ.get("CONTROL_LOCAL_UWB_FILE", "")
+CONTROL_LOCAL_UWB_DEVICES = os.environ.get("CONTROL_LOCAL_UWB_DEVICES", "{}")

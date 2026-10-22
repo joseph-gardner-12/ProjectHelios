@@ -214,3 +214,51 @@ pnpm localization:run --survey /absolute/path/real-survey.toml --record /absolut
 
 Do not use a dummy-frame credential for real measurements. No synthetic fallback
 is used when the collector, required altitude, or four-anchor epoch is missing.
+
+### Native Windows setup and source toggle
+
+No Docker or WSL is required. Install Node.js 24+, pnpm 11, uv, native PostgreSQL
+16+ and a native Redis-compatible server. Memurai is supported on Windows; the
+launcher discovers `memurai.exe` on PATH or in `C:\Program Files\Memurai` and
+starts a separate local instance on port 16379. PostgreSQL is discovered on PATH
+or under `C:\Program Files\PostgreSQL\<version>\bin`. Run from a normal
+PowerShell terminal, not an administrator terminal. Keep the checkout in your
+user directory so its local credentials inherit your account's filesystem ACLs.
+
+From the repository root:
+
+```powershell
+pnpm install --frozen-lockfile
+uv sync --locked --project apps/backend
+uv sync --locked --project apps/localization
+pnpm dev --survey apps/localization/configs/table-bench.toml
+```
+
+The launcher creates its own PostgreSQL data directory under `.helios/dev` and
+uses ports 15432 (PostgreSQL), 16379 (Redis/Memurai), 8000 (backend), and 5173
+(frontend). Existing system database services on 5432/6379 are not stopped or
+modified. Python runs natively on Windows and opens COM5 directly at 115200 baud;
+close other serial readers first. Ctrl+C stops the launcher's own processes and
+retains recordings and database contents. Separate `solo:*` panes remain POSIX-only.
+
+Sign in again after upgrading an existing local session to access both devices.
+The **UWB source** buttons switch the running reader between:
+
+- **Simulated UWB:** synthetic ranges and nonlinear correction, with the original
+  waypoint controls. Use **Rejoin queue** to obtain a turn before sending a target.
+- **Real UWB · COM5:** the table survey, real serial ranges, and fixed Z = 0.7466 m.
+  Aircraft commands remain disabled. An absent/busy collector stays offline;
+  simulation is never substituted automatically.
+
+Switching takes about six seconds while the prior connection lease expires.
+Switches are blocked during an active simulated command. The dashboard stays
+available after a serial startup failure; click Real UWB again after reconnecting
+the collector to retry, or choose simulation. This local, authenticated control
+is only enabled by `--survey`; production deployment does not expose runtime
+switching. The configured survey determines the real device port.
+
+References: [Memurai native Windows installation](https://docs.memurai.com/en/installation),
+[Memurai standalone command-line configuration](https://docs.memurai.com/en/config-file),
+and [Python process-group support on Windows](https://docs.python.org/3/library/subprocess.html).
+Windows CI checks launcher paths, locks, process cleanup, backend behavior, and
+localization tests; an attached COM5 collector still requires a hardware test.

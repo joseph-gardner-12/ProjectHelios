@@ -127,3 +127,18 @@ Authenticated device/browser WebSockets, a five-minute control queue, and durabl
 
 Tooling references: [pnpm workspaces](https://pnpm.io/workspaces),
 [Vite](https://vite.dev/guide/), and [Django](https://docs.djangoproject.com/en/6.0/).
+
+### Windows UWB bench
+
+Use native PostgreSQL and Redis/Memurai (no Docker). Install Node.js 24+, pnpm 11,
+uv, PostgreSQL 16+, and Memurai, then run:
+
+```powershell
+pnpm install --frozen-lockfile
+pnpm dev --survey apps/localization/configs/table-bench.toml
+```
+
+The dashboard's **Simulated UWB / Real UWB · COM5** buttons switch the local
+reader. See [Windows setup and switching](docs/localization.md#native-windows-setup-and-source-toggle)
+for dependency paths, ports, and troubleshooting. Keep the original waypoint
+controls for simulation; real tracking is read-only.

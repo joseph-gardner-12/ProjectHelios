@@ -77,7 +77,7 @@ export default function ControlPage() {
       <div className="control-intro"><h1>Helios Control</h1></div>
       <ControlSession control={control} />
       <div className="control-workspace">
-        <SpaceView drone={drone} target={target} stale={!control.fresh} source={control.snapshot?.source === "uwb" ? "UWB" : "Dummy"} />
+        <SpaceView drone={drone} target={target} stale={!control.fresh} source={control.snapshot?.capability === "measurement" ? "UWB" : "Dummy"} />
         <section className="control-panel target-panel" aria-labelledby="target-title">
           <div className="panel-heading"><div><h2 id="target-title">Set your target</h2></div><span className="panel-detail">Top view</span></div>
           <div className="target-controls">

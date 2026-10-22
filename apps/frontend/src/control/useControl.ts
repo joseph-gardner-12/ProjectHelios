@@ -3,7 +3,10 @@ import { ApiError, request, toMetres } from './api'
 import { subscribeDevice } from './live'
 import type { Command, Position, Session, Snapshot, Submission } from './api'
 
+type UwbSource = { enabled: boolean; mode?: "real" | "simulated"; devices?: Record<"real" | "simulated", string> }
+
 export function useControl() {
+  const [uwbSource, setUwbSource] = useState<UwbSource>({ enabled: false })
   const [session, setSession] = useState<Session | null>(null)
   const [device, setDevice] = useState<string | null>(null)
   const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
@@ -32,6 +35,20 @@ export function useControl() {
     }).catch(e => { if (!abort.signal.aborted) setError(String(e.message)) })
     return () => abort.abort()
   }, [loadDevice])
+
+  useEffect(() => {
+    if (!session?.authenticated) return
+    const abort = new AbortController()
+    request<UwbSource>('local/uwb-source/', undefined, abort.signal)
+      .then(value => {
+        if (abort.signal.aborted) return
+        setUwbSource(value)
+        const selected = value.mode && value.devices?.[value.mode]
+        if (selected) setDevice(selected)
+      })
+      .catch(() => { if (!abort.signal.aborted) setUwbSource({ enabled: false }) })
+    return () => abort.abort()
+  }, [session])
 
   useEffect(() => {
     const timer = window.setInterval(() => { setClock(performance.now()); setWallClock(Date.now()) }, 50)
@@ -103,11 +120,19 @@ export function useControl() {
     setDevice(id); setSnapshot(null); setSubmitted(null); pending.current = null
     setUnresolved(false); setConnected(false)
   }
+  const switchUwbSource = (mode: 'real' | 'simulated') => runAction(async () => {
+    if (unresolved) return
+    const result = await request<UwbSource>('local/uwb-source/', { mode })
+    const selected = result.devices?.[mode]
+    if (!result.enabled || !selected) throw new Error('Local UWB switching is unavailable')
+    setUwbSource(result); setDevice(selected); setSnapshot(null); setSubmitted(null)
+    pending.current = null; setUnresolved(false); setConnected(false)
+  })
   const fresh = connected && snapshot?.health === 'fresh'
     && received.age + Math.max(0, clock - received.at) < (snapshot?.capability === 'measurement'
       ? 100 - (snapshot.observation?.timing_sigma_s ?? 0) * 1000 : 2000)
   const command = snapshot?.command && snapshot.command.id === submitted?.id ? snapshot.command : submitted ?? snapshot?.command
-  return { session, snapshot, device, devices, selectDevice, connected, fresh, error, busy, unresolved, command, wallClock,
+  return { uwbSource, switchUwbSource, session, snapshot, device, devices, selectDevice, connected, fresh, error, busy, unresolved, command, wallClock,
     canSend: !!(fresh && snapshot?.can_send && !busy && !unresolved
       && !['pending_ack', 'accepted'].includes(command?.status ?? '')),
     login, logout, queue, send }

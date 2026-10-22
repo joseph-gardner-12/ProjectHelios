@@ -42,8 +42,9 @@ def test_setup_registers_and_saves_private_config_without_shared_password(tmp_pa
     assert "private-secret" not in destination.read_text()
     credential = Path(saved["credential_file"])
     assert credential.read_text().strip() == issued["credential"]
-    for path in (destination, credential):
-        assert path.stat().st_mode & 0o777 == 0o600
+    if os.name != "nt":  # Windows uses directory ACLs rather than POSIX mode bits.
+        for path in (destination, credential):
+            assert path.stat().st_mode & 0o777 == 0o600
     # Repeated setup must not create another registration, including legacy configs.
     registration.configure(destination)
     assert len(calls) == 1

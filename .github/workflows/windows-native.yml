@@ -1,0 +1,24 @@
+name: Native Windows localization
+on:
+  pull_request:
+    paths: ['scripts/**', 'apps/localization/**', 'apps/backend/**', '.github/workflows/windows-native.yml']
+  push:
+    branches: [develop]
+    paths: ['scripts/**', 'apps/localization/**', 'apps/backend/**', '.github/workflows/windows-native.yml']
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09
+      - uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff
+        with:
+          version: '0.11.16'
+      - run: uv sync --locked --project apps/backend
+      - run: uv sync --locked --project apps/localization
+      - run: uv run --locked --project apps/backend python scripts/dev.py --help
+      - run: uv run --locked --project apps/backend python -m unittest discover -s scripts -p "test_dev*.py"
+      - run: uv run --locked --project apps/localization pytest -c apps/localization/pyproject.toml apps/localization/tests
+      - run: uv run --locked --project apps/backend python apps/backend/manage.py test apps/backend --settings=config.settings.test

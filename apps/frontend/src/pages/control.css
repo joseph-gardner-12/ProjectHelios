@@ -98,3 +98,9 @@
 .observation-coordinates small { color: #c1b7cc; }
 .observation-panel dl { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr); gap: .5rem 1rem; }
 .observation-panel dd { margin: 0; overflow-wrap: anywhere; }
+
+.uwb-source-toggle { border: 0; padding: 0; margin: 1rem 0; }
+.uwb-source-toggle legend { margin-bottom: .5rem; }
+.uwb-source-toggle button { margin-right: .5rem; }
+.uwb-source-toggle button[aria-pressed="true"] { border-color: #d97736; background: #713f22; }
+.uwb-source-toggle p { font-size: .85rem; color: #b7b0bc; max-width: 65ch; }
