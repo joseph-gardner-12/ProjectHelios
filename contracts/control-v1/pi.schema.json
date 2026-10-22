@@ -34,7 +34,9 @@
           "format": "date-time"
         },
         "frame_version": {
-          "const": "dummy-enu-v1"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         },
         "telemetry_hz": {
           "const": 5
@@ -72,7 +74,15 @@
           "format": "date-time"
         },
         "frame_version": {
-          "const": "dummy-enu-v1"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "capability": {
+          "enum": [
+            "dummy",
+            "measurement"
+          ]
         }
       }
     },
@@ -107,7 +117,9 @@
           "format": "date-time"
         },
         "frame_version": {
-          "const": "dummy-enu-v1"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         }
       }
     },
@@ -216,7 +228,9 @@
           "format": "date-time"
         },
         "frame_version": {
-          "const": "dummy-enu-v1"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         },
         "command_id": {
           "type": "string",
@@ -262,7 +276,9 @@
           "format": "date-time"
         },
         "frame_version": {
-          "const": "dummy-enu-v1"
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
         },
         "command_id": {
           "type": "string",
@@ -367,6 +383,24 @@
               "type": "null"
             }
           ]
+        },
+        "simulated_localization": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "frame",
+            "observation"
+          ],
+          "properties": {
+            "frame": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "observation": {
+              "$ref": "#/$defs/observation"
+            }
+          }
         }
       }
     },
@@ -398,6 +432,253 @@
           "maxLength": 512
         }
       }
+    },
+    {
+      "type": "object",
+      "required": [
+        "version",
+        "type",
+        "device_id",
+        "connection_id",
+        "timestamp",
+        "frame_version",
+        "sequence",
+        "source",
+        "observation"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "version": {
+          "const": 1
+        },
+        "type": {
+          "const": "observation"
+        },
+        "device_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "connection_id": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "frame_version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "not": {
+            "const": "dummy-enu-v1"
+          }
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "source": {
+          "enum": [
+            "uwb",
+            "synthetic"
+          ]
+        },
+        "observation": {
+          "$ref": "#/$defs/observation"
+        }
+      }
     }
-  ]
+  ],
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "session",
+        "estimated_time",
+        "measurement_time",
+        "prediction_age_s",
+        "position",
+        "covariance",
+        "timing_sigma_s",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "measured",
+            "predicted",
+            "invalid"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "estimated_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "measurement_time": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prediction_age_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "covariance": {
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timing_sigma_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "invalid"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "position": {
+                "type": "null"
+              },
+              "covariance": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "position": {
+                "type": "object",
+                "required": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                }
+              },
+              "measurement_time": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "prediction_age_s": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.100001
+              },
+              "covariance": {
+                "type": "array"
+              },
+              "reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "measured"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prediction_age_s": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
 }

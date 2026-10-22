@@ -172,3 +172,51 @@ class SocketTests(TransactionTestCase):
         self.assertEqual(result["type"], "websocket.close")
         self.assertEqual(result["code"], 4401)
         await pi.disconnect()
+
+    async def test_measured_session_is_visible_and_cannot_control(self):
+        from django.utils import timezone
+
+        from .test_observations import observation
+
+        await database_sync_to_async(Device.objects.filter(pk=self.device.id).update)(
+            frame_version="survey-enu-v1"
+        )
+        pi = self.pi()
+        self.assertTrue((await pi.connect())[0])
+        setup = await pi.receive_json_from()
+        base = {k: v for k, v in setup.items() if k != "telemetry_hz"}
+        await pi.send_json_to({**base, "type": "ready", "capability": "measurement"})
+        await pi.send_json_to(
+            {
+                **base,
+                "type": "observation",
+                "sequence": 0,
+                "source": "uwb",
+                "observation": observation(timezone.now()),
+            }
+        )
+        viewer = self.viewer()
+        self.assertTrue((await viewer.connect())[0])
+        async with asyncio.timeout(3):
+            while True:
+                state = await viewer.receive_json_from(timeout=3)
+                if state.get("observation"):
+                    break
+        self.assertEqual(state["capability"], "measurement")
+        self.assertEqual(state["position"]["x"], -1.0)
+        self.assertFalse(state["can_send"])
+        self.assertEqual(state["observation"]["kind"], "measured")
+        with self.assertRaises(services.ControlError):
+            await database_sync_to_async(services.submit)(
+                self.device.id,
+                self.user,
+                self.session_key,
+                {
+                    "request_id": str(uuid.uuid4()),
+                    "lease_id": str(uuid.uuid4()),
+                    "frame_version": "survey-enu-v1",
+                    "target": {"x": 1, "y": 1, "z": 1},
+                },
+            )
+        await pi.disconnect()
+        await viewer.disconnect()

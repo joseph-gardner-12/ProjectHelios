@@ -90,3 +90,11 @@
 .target-panel > .control-detail { margin: 16px 24px 0; }
 .control-error { color: #ffb8aa; padding: 12px 16px; border: 1px solid #98564b; border-radius: 5px; }
 .control-status p { overflow-wrap: anywhere; }
+
+.observation-panel { padding: 1.5rem; }
+.observation-coordinates { display: grid; grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); gap: 1rem; margin-block: 1.5rem; }
+.observation-coordinates > div { display: grid; gap: .4rem; }
+.observation-coordinates output { font-size: 1.75rem; font-variant-numeric: tabular-nums; }
+.observation-coordinates small { color: #c1b7cc; }
+.observation-panel dl { display: grid; grid-template-columns: minmax(8rem, 1fr) minmax(0, 3fr); gap: .5rem 1rem; }
+.observation-panel dd { margin: 0; overflow-wrap: anywhere; }

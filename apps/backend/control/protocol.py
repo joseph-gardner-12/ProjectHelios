@@ -46,7 +46,8 @@ def validate_message(data, device, connection):
         raise ValueError("Wrong coordinate frame")
     timestamp(data["timestamp"])
     fields = {
-        "ready": set(),
+        "ready": {"capability"},
+        "observation": {"sequence", "source", "observation"},
         "heartbeat": set(),
         "ack": {"command_id", "accepted", "reason"},
         "arrival": {"command_id"},
@@ -57,6 +58,7 @@ def validate_message(data, device, connection):
             "state",
             "command_id",
             "completed_command_id",
+            "simulated_localization",
         },
     }
     base = {"version", "type", "device_id", "connection_id", "frame_version", "timestamp"}
@@ -64,13 +66,35 @@ def validate_message(data, device, connection):
         raise ValueError("Unexpected message fields")
     if "reason" in data and not isinstance(data["reason"], str):
         raise ValueError("Reason must be a string")
-    if data.get("type") not in {"ready", "position", "ack", "arrival", "heartbeat"}:
+    if data.get("type") not in {"ready", "position", "observation", "ack", "arrival", "heartbeat"}:
         raise ValueError("Unsupported message")
+    if data["type"] == "ready" and data.get("capability", "dummy") not in {"dummy", "measurement"}:
+        raise ValueError("Unsupported capability")
+    if data["type"] == "observation":
+        from .observations import validate_observation
+
+        if data.get("source") not in {"uwb", "synthetic"}:
+            raise ValueError("Invalid measurement source")
+        if type(data.get("sequence")) is not int or data["sequence"] < 0:
+            raise ValueError("Invalid sequence")
+        validate_observation(data["observation"])
     if data["type"] in {"ack", "arrival"}:
         identifier(data["command_id"])
     if data["type"] == "ack" and type(data.get("accepted")) is not bool:
         raise ValueError("Acknowledgment needs accepted boolean")
     if data["type"] == "position":
+        if "simulated_localization" in data:
+            from .observations import validate_observation
+
+            simulated = data["simulated_localization"]
+            if (
+                not isinstance(simulated, dict)
+                or set(simulated) != {"frame", "observation"}
+                or not isinstance(simulated["frame"], str)
+                or not 1 <= len(simulated["frame"]) <= 80
+            ):
+                raise ValueError("Invalid simulated localization")
+            validate_observation(simulated["observation"])
         coordinates(data["position"])
         if type(data.get("sequence")) is not int or data["sequence"] < 0:
             raise ValueError("Invalid sequence")

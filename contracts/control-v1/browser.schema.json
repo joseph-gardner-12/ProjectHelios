@@ -46,7 +46,9 @@
       "format": "date-time"
     },
     "frame_version": {
-      "const": "dummy-enu-v1"
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80
     },
     "revision": {
       "type": "integer",
@@ -75,19 +77,13 @@
           "additionalProperties": false,
           "properties": {
             "x": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 3.048
+              "type": "number"
             },
             "y": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 3.048
+              "type": "number"
             },
             "z": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 3.048
+              "type": "number"
             }
           }
         },
@@ -103,7 +99,11 @@
       ]
     },
     "source": {
-      "const": "dummy"
+      "enum": [
+        "dummy",
+        "uwb",
+        "synthetic"
+      ]
     },
     "command": {
       "type": [
@@ -223,7 +223,302 @@
     },
     "name": {
       "type": "string"
+    },
+    "capability": {
+      "enum": [
+        "dummy",
+        "measurement"
+      ]
+    },
+    "observation": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/observation"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "simulated_localization": {
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "frame",
+            "observation"
+          ],
+          "properties": {
+            "frame": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 80
+            },
+            "observation": {
+              "$ref": "#/$defs/observation"
+            }
+          }
+        },
+        {
+          "type": "null"
+        }
+      ]
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "session",
+        "estimated_time",
+        "measurement_time",
+        "prediction_age_s",
+        "position",
+        "covariance",
+        "timing_sigma_s",
+        "reason"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "measured",
+            "predicted",
+            "invalid"
+          ]
+        },
+        "session": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "estimated_time": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "measurement_time": {
+          "anyOf": [
+            {
+              "type": "string",
+              "format": "date-time"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prediction_age_s": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "position": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "x",
+                "y",
+                "z"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "x": {
+                  "type": "number"
+                },
+                "y": {
+                  "type": "number"
+                },
+                "z": {
+                  "type": "number"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "covariance": {
+          "anyOf": [
+            {
+              "type": "array",
+              "minItems": 3,
+              "maxItems": 3,
+              "items": {
+                "type": "array",
+                "minItems": 3,
+                "maxItems": 3,
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "timing_sigma_s": {
+          "type": "number",
+          "minimum": 0
+        },
+        "reason": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 120
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "invalid"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "position": {
+                "type": "null"
+              },
+              "covariance": {
+                "type": "null"
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "position": {
+                "type": "object",
+                "required": [
+                  "x",
+                  "y",
+                  "z"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "x": {
+                    "type": "number"
+                  },
+                  "y": {
+                    "type": "number"
+                  },
+                  "z": {
+                    "type": "number"
+                  }
+                }
+              },
+              "measurement_time": {
+                "type": "string",
+                "format": "date-time"
+              },
+              "prediction_age_s": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 0.100001
+              },
+              "covariance": {
+                "type": "array"
+              },
+              "reason": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "measured"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "prediction_age_s": {
+                "const": 0
+              }
+            }
+          }
+        }
+      ]
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "capability"
+        ],
+        "properties": {
+          "capability": {
+            "const": "measurement"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "observation"
+        ],
+        "properties": {
+          "can_send": {
+            "const": false
+          },
+          "frame_version": {
+            "not": {
+              "const": "dummy-enu-v1"
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "frame_version": {
+            "const": "dummy-enu-v1"
+          },
+          "source": {
+            "const": "dummy"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "x": {
+                    "minimum": 0,
+                    "maximum": 3.048
+                  },
+                  "y": {
+                    "minimum": 0,
+                    "maximum": 3.048
+                  },
+                  "z": {
+                    "minimum": 0,
+                    "maximum": 3.048
+                  }
+                }
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
 }

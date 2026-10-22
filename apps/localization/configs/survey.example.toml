@@ -1,0 +1,53 @@
+# Synthetic bench geometry only. Replace with surveyed antenna coordinates.
+version = 1
+frame = "bench-enu-v1"
+protocol = "synthetic-json-v1"
+protocol_verified = false
+firmware = "unverified"
+controller_firmware = "unverified"
+uwb_port = ""
+uwb_baud = 250000
+mavlink_port = ""
+mavlink_baud = 57600
+external_nav = false
+# body FRD offset from aircraft reference point to tag antenna
+ tag_offset_frd = [0.0, 0.0, 0.0]
+# Survey dock origin expressed in EKF local NED, metres
+ dock_in_ned = [0.0, 0.0, 0.0]
+# survey z = -LOCAL_POSITION_NED.z + altitude_offset
+altitude_offset = 0.0
+altitude_sigma = 0.15
+prediction_limit = 0.1
+max_age = 0.1
+max_skew = 0.05
+max_sigma = 0.5
+acceleration_sigma = 2.0
+initial_velocity_sigma = 2.0
+max_speed = 3.0
+gate_sigma = 5.0
+huber_scale = 1.5
+max_condition = 100.0
+acquisition_delay = 0.0
+timing_sigma = 0.02
+recording_max_bytes = 100000000
+
+[[anchors]]
+id = "A0"
+xyz = [0.0, 0.0, 2.0]
+bias = 0.0
+sigma = 0.1
+[[anchors]]
+id = "A1"
+xyz = [3.0, 0.0, 2.0]
+bias = 0.0
+sigma = 0.1
+[[anchors]]
+id = "A2"
+xyz = [3.0, 3.0, 2.0]
+bias = 0.0
+sigma = 0.1
+[[anchors]]
+id = "A3"
+xyz = [0.0, 3.0, 2.0]
+bias = 0.0
+sigma = 0.1

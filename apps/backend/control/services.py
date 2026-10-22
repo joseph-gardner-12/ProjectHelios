@@ -25,7 +25,7 @@ from .models import (
     QueueEntry,
     RegistrationSettings,
 )
-from .protocol import ACTIVE, coordinates, identifier, validate_message
+from .protocol import ACTIVE, coordinates, identifier, timestamp, validate_message
 
 log = logging.getLogger(__name__)
 
@@ -97,8 +97,22 @@ def live(device, state, now):
     )
 
 
+def measurement_only(device, state):
+    return (
+        device.frame_version != "dummy-enu-v1" or (state or {}).get("capability") == "measurement"
+    )
+
+
 def fresh(device, state, now):
-    return live(device, state, now) and now.timestamp() - state.get("position_at", 0) < 2
+    if not live(device, state, now):
+        return False
+    if measurement_only(device, state):
+        return bool(
+            state.get("observation")
+            and state["observation"]["kind"] != "invalid"
+            and now.timestamp() <= state.get("valid_until", 0)
+        )
+    return now.timestamp() - state.get("position_at", 0) < 2
 
 
 def invalidate(device, reason):
@@ -162,7 +176,13 @@ def reconcile_locked(device, state, now):
         expired.delete()
         waiting.filter(released=True).delete()
         changed(device)
-    if not lease and not active and fresh(device, state, now) and state.get("state") == "idle":
+    if (
+        not measurement_only(device, state)
+        and not lease
+        and not active
+        and fresh(device, state, now)
+        and state.get("state") == "idle"
+    ):
         # A newly queued HTTP session is not yet present; only promote a socket-confirmed entry.
         for entry in waiting.filter(released=False).order_by("joined_at", "id"):
             if presence.client().exists(browser_key(device.id, entry.session_key)):
@@ -195,7 +215,10 @@ def join(device_id, user, session_key):
     permitted(device_id, user)
     with transaction.atomic():
         device = Device.objects.select_for_update().get(pk=device_id)
-        reconcile_locked(device, presence.read(device_id), timezone.now())
+        state = presence.read(device_id)
+        if measurement_only(device, state):
+            raise ControlError("Measurement-only device cannot accept control turns")
+        reconcile_locked(device, state, timezone.now())
         existing = QueueEntry.objects.filter(device=device, user=user).first()
         if existing and existing.session_key != session_key:
             raise ControlError("This email already has a queue place in another session")
@@ -247,7 +270,10 @@ def snapshot(device_id, user, session_key):
             "position": state.get("position") if state else None,
             "position_at": state.get("position_at") if state else None,
             "sequence": state.get("sequence", -1) if state else -1,
-            "source": "dummy",
+            "source": state.get("source", "dummy") if state else "dummy",
+            "capability": "measurement" if measurement_only(device, state) else "dummy",
+            "observation": state.get("observation") if state else None,
+            "simulated_localization": state.get("simulated_localization") if state else None,
             "command": command_json(command),
             "queue": {
                 "position": queue_position,
@@ -258,7 +284,8 @@ def snapshot(device_id, user, session_key):
                 "releasing": bool(entry and entry.released),
             },
             "can_send": bool(
-                owns
+                not measurement_only(device, state)
+                and owns
                 and not entry.released
                 and lease.expires_at > now
                 and usable
@@ -295,7 +322,8 @@ def submit(device_id, user, session_key, data):
         lease = reconcile_locked(device, state, now)
         # Do not raise inside the transaction after reconciliation: persist expired state first.
         valid = (
-            lease
+            not measurement_only(device, state)
+            and lease
             and str(lease.id) == lease_id
             and lease.entry
             and lease.entry.user_id == user.id
@@ -505,7 +533,11 @@ def dispatch_message(device_id, connection_id, command_id):
         command = Command.objects.filter(
             pk=command_id, device=device, connection_id=connection_id, status="pending_ack"
         ).first()
-        if not command or str(device.connection_id) != str(connection_id):
+        if (
+            measurement_only(device, state)
+            or not command
+            or str(device.connection_id) != str(connection_id)
+        ):
             return None
         return {
             **envelope(device, "target"),
@@ -541,8 +573,47 @@ def receive_pi(device_id, connection_id, data):
         state["received_at"] = now.timestamp()
         kind = data["type"]
         if kind == "ready":
+            capability = data.get("capability", "dummy")
+            if (device.frame_version != "dummy-enu-v1") != (capability == "measurement"):
+                raise ValueError("Capability must match configured device frame")
+            if state.get("ready") and capability != state.get("capability"):
+                raise ValueError("Cannot change capability during a session")
             state["ready"] = True
+            state["capability"] = capability
+        elif kind == "observation":
+            if not state.get("ready") or not measurement_only(device, state):
+                raise ValueError("Measurement setup required")
+            if data["sequence"] <= state.get("sequence", -1):
+                return
+            observation = data["observation"]
+            estimated_at = timestamp(observation["estimated_time"]).timestamp()
+            measured_at = (
+                timestamp(observation["measurement_time"]).timestamp()
+                if observation["measurement_time"]
+                else 0
+            )
+            if estimated_at > now.timestamp() + 0.05:
+                raise ValueError("Observation timestamp is in the future")
+            # A repeated result may update validity, but never refresh its source age.
+            if (
+                state.get("observation")
+                and measured_at
+                and measured_at < state.get("position_at", 0)
+            ):
+                raise ValueError("Measurement timestamp moved backwards")
+            state.update(
+                sequence=data["sequence"],
+                source=data["source"],
+                state="observing",
+                observation=observation,
+                position_at=measured_at,
+                valid_until=measured_at + 0.1 - observation["timing_sigma_s"],
+            )
+            if observation["position"] is not None:
+                state["position"] = observation["position"]
         elif kind == "position":
+            if measurement_only(device, state):
+                raise ValueError("Measurement sessions cannot send dummy positions")
             if not state.get("ready") or data["sequence"] <= state.get("sequence", -1):
                 return
             if not state.get("position_at") and data["state"] != "idle":
@@ -552,6 +623,7 @@ def receive_pi(device_id, connection_id, data):
                 sequence=data["sequence"],
                 position_at=now.timestamp(),
                 source_timestamp=data["timestamp"],
+                simulated_localization=data.get("simulated_localization"),
                 state=data["state"],
             )
             completed = data.get("completed_command_id")

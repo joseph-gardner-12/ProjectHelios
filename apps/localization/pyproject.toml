@@ -5,6 +5,10 @@ description = "Project Helios dock-side localization service scaffold"
 requires-python = ">=3.14,<3.15"
 dependencies = [
     "websockets>=15,<17",
+    "numpy>=2.3,<3",
+    "scipy>=1.16,<2",
+    "pyserial>=3.5,<4",
+    "pymavlink>=2.4.49,<3",
 ]
 
 [project.scripts]

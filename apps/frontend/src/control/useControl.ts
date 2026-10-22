@@ -6,6 +6,7 @@ import type { Command, Position, Session, Snapshot, Submission } from './api'
 export function useControl() {
   const [session, setSession] = useState<Session | null>(null)
   const [device, setDevice] = useState<string | null>(null)
+  const [devices, setDevices] = useState<{ id: string; name: string }[]>([])
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null)
   const [connected, setConnected] = useState(false)
   const [error, setError] = useState('')
@@ -19,8 +20,9 @@ export function useControl() {
   const inFlight = useRef(false)
 
   const loadDevice = useCallback(async (signal?: AbortSignal) => {
-    const result = await request<{ devices: { id: string }[] }>('devices/', undefined, signal)
-    setDevice(result.devices[0]?.id ?? null)
+    const result = await request<{ devices: { id: string; name: string }[] }>('devices/', undefined, signal)
+    setDevices(result.devices)
+    setDevice(previous => result.devices.some(value => value.id === previous) ? previous : result.devices[0]?.id ?? null)
   }, [])
   useEffect(() => {
     const abort = new AbortController()
@@ -32,7 +34,7 @@ export function useControl() {
   }, [loadDevice])
 
   useEffect(() => {
-    const timer = window.setInterval(() => { setClock(performance.now()); setWallClock(Date.now()) }, 250)
+    const timer = window.setInterval(() => { setClock(performance.now()); setWallClock(Date.now()) }, 50)
     return () => clearInterval(timer)
   }, [])
 
@@ -42,7 +44,8 @@ export function useControl() {
       snapshot(next) {
         setReceived({ at: performance.now(), age: next.position_at === null ? Infinity
           : Math.max(0, Date.parse(next.timestamp) - next.position_at * 1000) })
-        setSnapshot(previous => next.position ? next : { ...next, position: previous?.position ?? null })
+        setSnapshot(previous => next.position || previous?.device_id !== next.device_id
+          || previous?.frame_version !== next.frame_version ? next : { ...next, position: previous?.position ?? null })
         setConnected(true)
       },
       disconnected() { setConnected(false) },
@@ -59,7 +62,7 @@ export function useControl() {
     await request<Session>('session/')
     const result = await request<Session & { device_id: string }>('login/', { email, password })
     setSnapshot(null); setSubmitted(null); pending.current = null; setUnresolved(false)
-    setSession(result); setDevice(result.device_id)
+    setSession(result); setDevice(result.device_id); await loadDevice()
   })
   const logout = () => runAction(async () => {
     const result = await request<Session>('logout/', {})
@@ -70,7 +73,7 @@ export function useControl() {
     await request(`devices/${device}/queue/${join ? 'join' : 'leave'}/`, {})
   })
   const send = (target: Position) => runAction(async () => {
-    if (!device) return
+    if (!device || snapshot?.capability === 'measurement') return
     if (!pending.current) {
       if (!snapshot?.queue.lease_id) return
       pending.current = { request_id: crypto.randomUUID(), lease_id: snapshot.queue.lease_id,
@@ -95,10 +98,16 @@ export function useControl() {
       throw e
     }
   })
+  const selectDevice = (id: string) => {
+    if (inFlight.current || unresolved || !devices.some(value => value.id === id)) return
+    setDevice(id); setSnapshot(null); setSubmitted(null); pending.current = null
+    setUnresolved(false); setConnected(false)
+  }
   const fresh = connected && snapshot?.health === 'fresh'
-    && received.age + clock - received.at < 2000
+    && received.age + Math.max(0, clock - received.at) < (snapshot?.capability === 'measurement'
+      ? 100 - (snapshot.observation?.timing_sigma_s ?? 0) * 1000 : 2000)
   const command = snapshot?.command && snapshot.command.id === submitted?.id ? snapshot.command : submitted ?? snapshot?.command
-  return { session, snapshot, connected, fresh, error, busy, unresolved, command, wallClock,
+  return { session, snapshot, device, devices, selectDevice, connected, fresh, error, busy, unresolved, command, wallClock,
     canSend: !!(fresh && snapshot?.can_send && !busy && !unresolved
       && !['pending_ack', 'accepted'].includes(command?.status ?? '')),
     login, logout, queue, send }
