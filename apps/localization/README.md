@@ -16,8 +16,11 @@ uv run --locked --project apps/localization helios-localization record-ranges
 
 This writes append-only JSON Lines to `a4-range-reports.jsonl`. Override the
 port, baud rate, or output path with `--port`, `--baud`, and `--output`. The
-recorder never sends AT commands. Add `--echo` to also print each JSON record in
-the terminal. Stop it with Ctrl+C.
+recorder never sends AT commands. Add `--echo` to print active ranges as a JSON
+mapping from anchor ID to centimetres. For example, a report with ranges to
+anchors 0, 2, 3, and 4 prints `{"0": 208, "2": 271, "3": 322, "4": 143}`. The
+JSON Lines file retains the raw report and the matching anchor IDs. Stop it with
+Ctrl+C.
 
 `transport.py` owns the outbound WebSocket, authentication, heartbeats, and
 reconnection. `coordinator.py` owns command validation and lifecycle.

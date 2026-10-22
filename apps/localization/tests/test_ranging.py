@@ -4,7 +4,11 @@ from pathlib import Path
 import pytest
 import serial
 
-from helios_localization.ranging import parse_range_report, record_range_reports
+from helios_localization.ranging import (
+    active_ranges_cm,
+    parse_range_report,
+    record_range_reports,
+)
 
 SAMPLES = [
     "AT+RANGE=tid:1,mask:10,seq:35,range:(0,0,0,0,102,0,0,0),ancid:(-1,-1,-1,-1,4,-1,-1,-1)",
@@ -23,6 +27,15 @@ def test_parses_captured_a4_samples():
         (1, 37, 4, 1.09),
     ]
     assert all(item.mask == "10" for item in measurements)
+
+
+def test_maps_active_ranges_to_anchor_ids_in_centimetres():
+    measurements = parse_range_report(
+        "AT+RANGE=tid:1,mask:0F,seq:35,range:(102,106,109,98,0,0,0,0),"
+        "ancid:(1,2,3,4,-1,-1,-1,-1)"
+    )
+    assert active_ranges_cm(measurements) == {1: 102, 2: 106, 3: 109, 4: 98}
+    assert active_ranges_cm(parse_range_report(SAMPLES[0])) == {4: 102}
 
 
 @pytest.mark.parametrize(
@@ -72,7 +85,7 @@ def test_records_rejections_and_suppresses_duplicates(tmp_path, capsys):
         "duplicate measurement", "partial serial line", "Not a complete AT+RANGE report"
     ]
     assert fake.closed
-    assert '"type": "range_measurement"' in capsys.readouterr().out
+    assert capsys.readouterr().out == '{"4": 102}\n'
 
 
 def test_reconnects_after_serial_error(tmp_path):

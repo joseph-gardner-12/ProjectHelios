@@ -54,7 +54,11 @@ def main():
     record_ranges.add_argument(
         "--output", type=Path, default=Path("a4-range-reports.jsonl"), help="JSON Lines output"
     )
-    record_ranges.add_argument("--echo", action="store_true", help="Print records while writing them")
+    record_ranges.add_argument(
+        "--echo",
+        action="store_true",
+        help="Print active ranges as JSON anchor-ID-to-centimetre mappings",
+    )
     commands.add_parser("run", help="Hardware runtime (not implemented)")
     commands.add_parser("replay", help="Recorded ranging replay (not implemented)")
     args = parser.parse_args()

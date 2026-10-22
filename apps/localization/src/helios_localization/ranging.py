@@ -88,6 +88,14 @@ def parse_range_report(line: str) -> list[RangeMeasurement]:
     return measurements
 
 
+def active_ranges_cm(measurements: list[RangeMeasurement]) -> dict[int, int]:
+    """Return active ranges as a mapping from anchor ID to centimetres."""
+    return {
+        measurement.anchor_id: round(measurement.distance_m * 100)
+        for measurement in measurements
+    }
+
+
 class RecentMeasurements:
     """Bound duplicate suppression so source-sequence wrap can recover."""
 
@@ -111,12 +119,10 @@ class RecentMeasurements:
         return False
 
 
-def _write_jsonl(output, value: dict, *, echo: bool) -> None:
+def _write_jsonl(output, value: dict) -> None:
     line = json.dumps(value, sort_keys=True)
     output.write(line + "\n")
     output.flush()
-    if echo:
-        print(line, flush=True)
 
 
 def record_range_reports(
@@ -146,7 +152,6 @@ def record_range_reports(
                 "baudrate": baudrate,
                 "collector": COLLECTOR_METADATA,
             },
-            echo=echo,
         )
         while max_lines is None or completed_lines < max_lines:
             connection = None
@@ -176,7 +181,6 @@ def record_range_reports(
                                 "reason": "partial serial line",
                                 "raw": raw_bytes.decode("utf-8", errors="replace"),
                             },
-                            echo=echo,
                         )
                         continue
                     try:
@@ -190,7 +194,6 @@ def record_range_reports(
                                 "reason": "invalid UTF-8",
                                 "raw": raw_bytes.decode("utf-8", errors="replace"),
                             },
-                            echo=echo,
                         )
                         continue
                     try:
@@ -204,9 +207,9 @@ def record_range_reports(
                                 "reason": str(exc),
                                 "raw": raw_line,
                             },
-                            echo=echo,
                         )
                         continue
+                    accepted_measurements = []
                     for measurement in measurements:
                         if recent.contains_or_add(measurement):
                             _write_jsonl(
@@ -218,7 +221,6 @@ def record_range_reports(
                                     "raw": raw_line,
                                     **measurement.as_dict(),
                                 },
-                                echo=echo,
                             )
                             continue
                         _write_jsonl(
@@ -229,8 +231,11 @@ def record_range_reports(
                                 "raw": raw_line,
                                 **measurement.as_dict(),
                             },
-                            echo=echo,
                         )
+                        accepted_measurements.append(measurement)
+                    if echo:
+                        if accepted_measurements:
+                            print(json.dumps(active_ranges_cm(accepted_measurements)), flush=True)
             except (serial.SerialException, OSError) as exc:
                 logging.warning(
                     "Cannot read %s: %s; retrying in %.0f seconds", port, exc, retry_delay
