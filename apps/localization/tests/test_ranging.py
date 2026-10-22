@@ -31,8 +31,7 @@ def test_parses_captured_a4_samples():
 
 def test_maps_active_ranges_to_anchor_ids_in_centimetres():
     measurements = parse_range_report(
-        "AT+RANGE=tid:1,mask:0F,seq:35,range:(102,106,109,98,0,0,0,0),"
-        "ancid:(1,2,3,4,-1,-1,-1,-1)"
+        "AT+RANGE=tid:1,mask:0F,seq:35,range:(102,106,109,98,0,0,0,0),ancid:(1,2,3,4,-1,-1,-1,-1)"
     )
     assert active_ranges_cm(measurements) == {1: 102, 2: 106, 3: 109, 4: 98}
     assert active_ranges_cm(parse_range_report(SAMPLES[0])) == {4: 102}
@@ -42,12 +41,18 @@ def test_maps_active_ranges_to_anchor_ids_in_centimetres():
     "line,reason",
     [
         ("garbage", "Not a complete AT\\+RANGE report"),
-        ("AT+RANGE=tid:1,mask:10,seq:35,range:(102),ancid:(4,5)",
-         "Range and anchor-ID tuple lengths differ"),
-        ("AT+RANGE=tid:1,mask:10,seq:35,range:(0),ancid:(4)",
-         "Active anchor has a nonpositive range"),
-        ("AT+RANGE=tid:1,mask:10,seq:35,range:(0),ancid:(-1)",
-         "Range report has no active anchor measurements"),
+        (
+            "AT+RANGE=tid:1,mask:10,seq:35,range:(102),ancid:(4,5)",
+            "Range and anchor-ID tuple lengths differ",
+        ),
+        (
+            "AT+RANGE=tid:1,mask:10,seq:35,range:(0),ancid:(4)",
+            "Active anchor has a nonpositive range",
+        ),
+        (
+            "AT+RANGE=tid:1,mask:10,seq:35,range:(0),ancid:(-1)",
+            "Range report has no active anchor measurements",
+        ),
     ],
 )
 def test_rejects_invalid_range_reports(line, reason):
@@ -73,16 +78,22 @@ def read_jsonl(path: Path):
 
 def test_records_rejections_and_suppresses_duplicates(tmp_path, capsys):
     output = tmp_path / "ranges.jsonl"
-    fake = FakeSerial([(SAMPLES[0] + "\r\n").encode(), (SAMPLES[0] + "\r\n").encode(),
-                       b"AT+RANGE=tid:1", b"not-a-range\r\n"])
-    record_range_reports(
-        "COM4", output, max_lines=4, echo=True, serial_factory=lambda **_: fake
+    fake = FakeSerial(
+        [
+            (SAMPLES[0] + "\r\n").encode(),
+            (SAMPLES[0] + "\r\n").encode(),
+            b"AT+RANGE=tid:1",
+            b"not-a-range\r\n",
+        ]
     )
+    record_range_reports("COM4", output, max_lines=4, echo=True, serial_factory=lambda **_: fake)
     records = read_jsonl(output)
     assert records[0]["type"] == "collector_metadata"
     assert records[1]["distance_m"] == 1.02
     assert [record["reason"] for record in records[2:]] == [
-        "duplicate measurement", "partial serial line", "Not a complete AT+RANGE report"
+        "duplicate measurement",
+        "partial serial line",
+        "Not a complete AT+RANGE report",
     ]
     assert fake.closed
     assert capsys.readouterr().out == '{"4": 102}\n'
@@ -105,3 +116,26 @@ def test_reconnects_after_serial_error(tmp_path):
     assert attempts == 2
     assert delays == [1.0]
     assert read_jsonl(output)[1]["sequence"] == 35
+
+
+def test_shared_parser_uses_anchor_ids_not_mask_and_rejects_duplicate_ids():
+    from dataclasses import replace
+
+    from helios_localization.config import load_settings
+    from helios_localization.ranging import parse_record
+
+    cfg = replace(
+        load_settings("apps/localization/configs/survey.example.toml"),
+        protocol="mauwb-at-v1.1.6",
+        tag_id=1,
+    )
+    raw = (
+        b"AT+RANGE=tid:1,mask:00,seq:35,range:(102,106,109,98,0,0,0,0),ancid:(4,2,3,0,-1,-1,-1,-1)"
+    )
+    epoch = parse_record(raw, cfg, "capture", 10)
+    assert epoch.ranges == {"A4": 1.02, "A2": 1.06, "A3": 1.09, "A0": 0.98}
+    assert epoch.timing_source == "receive_estimate"
+    with pytest.raises(ValueError, match="Duplicate anchor"):
+        parse_record(raw.replace(b"4,2,3,0", b"4,2,3,4"), cfg, "capture", 10)
+    # James's observed single-anchor report remains incomplete; never invent other ranges.
+    assert parse_record(SAMPLES[0].encode(), cfg, "capture", 10).ranges == {"A4": 1.02}

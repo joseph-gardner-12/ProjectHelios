@@ -23,6 +23,7 @@ class Settings:
     dock_in_ned: tuple[float, float, float] = (0.0, 0.0, 0.0)
     altitude_offset: float = 0.0
     altitude_sigma: float = 0.15
+    fixed_height: float | None = None  # explicit stationary-height bench constraint
     max_age: float = 0.1
     max_skew: float = 0.05
     prediction_limit: float = 0.1
@@ -88,6 +89,13 @@ class Settings:
             value = getattr(self, name)
             if type(value) not in (int, float) or not math.isfinite(value) or value <= 0:
                 raise ValueError(f"Invalid {name}")
+        if self.fixed_height is not None:
+            if type(self.fixed_height) not in (int, float) or not math.isfinite(self.fixed_height):
+                raise ValueError("fixed_height must be a finite surveyed height in metres")
+            if self.external_nav or self.mavlink_port or any(self.tag_offset_frd):
+                raise ValueError(
+                    "Fixed-height bench mode requires no MAVLink, output, or tag offset"
+                )
         if self.prediction_limit > 0.1:
             raise ValueError("Bench prediction limit cannot exceed 100 ms")
         if not math.isfinite(self.altitude_offset) or self.acquisition_delay < 0:

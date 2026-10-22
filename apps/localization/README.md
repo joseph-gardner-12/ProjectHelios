@@ -113,3 +113,11 @@ installations can retain those overrides and their original credential. Install
 the updated unit with `RestartPreventExitStatus=3 4` so conflict and credential
 errors remain stopped rather than being automatically restarted. The unit invokes
 the Python entry point directly and preserves these statuses.
+
+## Real tag tracking
+
+Use `pnpm dev --survey /absolute/path/real-survey.toml` to connect the collector
+to the nonlinear solver and local dashboard. Both `record-ranges` and `run` now
+use the same anchor-ID parser. Supply a real four-anchor survey and either
+flight-controller altitude or an explicit fixed-height bench constraint. See
+[real collector setup](../../docs/localization.md#connect-the-real-collector-to-the-dashboard).

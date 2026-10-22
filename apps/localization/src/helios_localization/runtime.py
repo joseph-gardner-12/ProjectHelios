@@ -11,6 +11,7 @@ from datetime import UTC, datetime
 import serial
 
 from .mavlink import AircraftLink
+from .measurements import AircraftSample
 from .protocol import validate
 from .ranging import LineReader
 from .replay import Pipeline, Recorder
@@ -137,8 +138,13 @@ async def publish_cloud(latest, settings, wall_origin, url, credential_file, dev
 
 
 async def run_measurements(settings, recording, *, capture_only=False, cloud=None):
-    if not settings.uwb_port or (not capture_only and not settings.mavlink_port):
-        raise ValueError("Configure uwb_port and, for estimation, mavlink_port")
+    if not settings.uwb_port or (
+        not capture_only and not settings.mavlink_port and settings.fixed_height is None
+    ):
+        raise ValueError(
+            "Configure uwb_port and either mavlink_port "
+            "or an explicit fixed_height bench constraint"
+        )
     if settings.external_nav and (
         capture_only
         or not settings.protocol_verified
@@ -151,6 +157,11 @@ async def run_measurements(settings, recording, *, capture_only=False, cloud=Non
         )
     if not settings.protocol_verified:
         log.warning("Protocol/timing configuration is unqualified; capture and bench use only")
+    if settings.fixed_height is not None:
+        log.warning(
+            "Bench height constrained to %.3f m; vertical motion is not measured",
+            settings.fixed_height,
+        )
     session = str(uuid.uuid4())
     start = time.monotonic()
     wall_origin = time.time() - start
@@ -169,7 +180,21 @@ async def run_measurements(settings, recording, *, capture_only=False, cloud=Non
         tick_at = 0
         while True:
             now = time.monotonic()
-            for sample in link.poll(now) if link else ():
+            samples = link.poll(now) if link else ()
+            if not capture_only and settings.fixed_height is not None:
+                samples = [
+                    AircraftSample(
+                        "fixed-height-bench",
+                        now,
+                        now,
+                        settings.fixed_height,
+                        settings.altitude_sigma,
+                        0,
+                        0,
+                        0,
+                    )
+                ]
+            for sample in samples:
                 recorder.write({"type": "aircraft", "at": now, "sample": asdict(sample)})
                 pipeline.aircraft(sample)
             for event in link.events if link else ():
@@ -188,7 +213,10 @@ async def run_measurements(settings, recording, *, capture_only=False, cloud=Non
                     result = pipeline.range(raw, now)
                     latest[0] = result
                     recorder.write({"type": "estimate", "at": now, "result": result.as_dict()})
-                    if result.kind == "measured":
+                    log.info(
+                        "UWB %s position=%s reason=%s", result.kind, result.position, result.reason
+                    )
+                    if result.kind == "measured" and link:
                         sent = link.send_estimate(result, pipeline.estimator.aircraft, now)
                         if sent:
                             recorder.write(

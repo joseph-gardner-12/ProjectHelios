@@ -1,0 +1,44 @@
+# User-supplied bench layout, metres. Anchor/tag antennas share the table plane.
+# XY assignments follow the supplied anchor order: 0, 2, 3, 4.
+version = 1
+frame = "table-bench-enu-v1"
+protocol = "mauwb-at-v1.1.6"
+protocol_verified = false
+firmware = "V01_01_006"
+controller_firmware = "unverified"
+tag_id = 1
+uwb_port = "COM5"
+# Retained from James's collector setup; verify against the connected collector.
+uwb_baud = 115200
+mavlink_port = ""
+external_nav = false
+fixed_height = 0.7466
+# Provisional noise settings, not measured calibration or precision claims.
+altitude_sigma = 0.15
+tag_offset_frd = [0.0, 0.0, 0.0]
+prediction_limit = 0.1
+timing_sigma = 0.02
+
+[[anchors]]
+id = "A0"
+xyz = [0.0, 0.0, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A2"
+xyz = [2.43, 0.0, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A3"
+xyz = [0.0, 1.2192, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A4"
+xyz = [2.43, 1.2192, 0.7466]
+bias = 0.0
+sigma = 0.1

@@ -69,7 +69,7 @@ def ready(url):
         return response.status == 200
 
 
-def prepare_device(uwb=False):
+def prepare_device(uwb=False, survey=None):
     # Django is imported only after this launcher has forced its isolated local environment.
     sys.path.insert(0, str(ROOT / "apps/backend"))
     import django
@@ -82,19 +82,22 @@ def prepare_device(uwb=False):
     from django.db import connections
 
     call_command("migrate", verbosity=0)
-    profile = STATE / ("uwb-waypoint-device.json" if uwb else "device.json")
-    credential_path = STATE / ("uwb-waypoint.credential" if uwb else "pi.credential")
+    profile = STATE / ("hardware-device.json" if survey else "uwb-waypoint-device.json" if uwb else "device.json")
+    credential_path = STATE / ("hardware.credential" if survey else "uwb-waypoint.credential" if uwb else "pi.credential")
     saved = json.loads(profile.read_text()) if profile.exists() else {}
     device = (
         Device.objects.filter(pk=saved.get("id")).first() if saved.get("id") else None
     )
     if not device:
         device = Device.objects.create(
-            name="Synthetic UWB · noisy ranges and dropouts" if uwb else "Local dummy Pi",
-            frame_version="dummy-enu-v1",
+            name="Real UWB collector" if survey else "Synthetic UWB · noisy ranges and dropouts" if uwb else "Local dummy Pi",
+            frame_version=survey["frame"] if survey else "dummy-enu-v1",
         )
         profile.write_text(json.dumps({"id": str(device.id)}) + "\n")
         profile.chmod(0o600)
+    if survey and device.frame_version != survey["frame"]:
+        device.frame_version = survey["frame"]
+        device.save(update_fields=["frame_version"])
     credential = (
         authenticate_pi(credential_path.read_text().strip())
         if credential_path.exists()
@@ -285,7 +288,28 @@ def main():
         choices=("postgres", "redis", "backend", "control", "frontend", "localization"),
     )
     parser.add_argument("--uwb", action="store_true", help="Run real UWB solver with synthetic sensors")
+    parser.add_argument("--survey", type=Path, help="Real UWB survey TOML; starts hardware tracking")
     args = parser.parse_args()
+    if args.survey and (args.uwb or args.service):
+        parser.error("--survey cannot be combined with --uwb or --service")
+    survey = None
+    if args.survey:
+        sys.path.insert(0, str(ROOT / "apps/localization/src"))
+        from helios_localization.config import load_settings
+
+        args.survey = args.survey.resolve()
+        try:
+            hardware_settings = load_settings(args.survey)
+        except (OSError, ValueError, TypeError, KeyError) as exc:
+            parser.error(str(exc))
+        if not hardware_settings.uwb_port or (
+            not hardware_settings.mavlink_port and hardware_settings.fixed_height is None
+        ):
+            parser.error("Hardware tracking needs uwb_port and MAVLink altitude or fixed_height")
+        survey = {"frame": hardware_settings.frame, "protocol": hardware_settings.protocol,
+                  "external_nav": hardware_settings.external_nav}
+        if survey.get("protocol") != "mauwb-at-v1.1.6" or survey.get("external_nav", False):
+            parser.error("Hardware dashboard requires MaUWB protocol and external_nav=false")
     if args.uwb and args.service:
         parser.error("--uwb starts the complete stack; omit --service")
     if args.service:
@@ -407,7 +431,7 @@ def main():
                 database.execute(
                     sql.SQL("CREATE DATABASE {} ").format(sql.Identifier("helios_dev"))
                 )
-        device_id = prepare_device(uwb=args.uwb)
+        device_id = prepare_device(uwb=args.uwb, survey=survey)
         start(
             "backend",
             [sys.executable, "manage.py", "runserver", "127.0.0.1:8000"],
@@ -429,7 +453,9 @@ def main():
         start(
             "localization",
             [str(ROOT / "apps/localization/.venv/bin/helios-localization"),
-             *(["simulate-uwb", "--survey", str(ROOT / "apps/localization/configs/survey.example.toml")]
+             *(["run", "--survey", str(args.survey), "--cloud",
+                "--record", str(STATE / f"uwb-{time.time_ns()}.jsonl")] if survey else
+               ["simulate-uwb", "--survey", str(ROOT / "apps/localization/configs/survey.example.toml")]
                if args.uwb else ["simulate"])],
         )
         wait_for(lambda: ready("http://127.0.0.1:5173/control"), processes, "frontend")
@@ -440,10 +466,11 @@ def main():
             return (
                 state
                 and state.get("sequence", -1) >= 2
-                and (state.get("simulated_localization") if args.uwb else state.get("source_timestamp"))
+                and (state.get("observation") if survey else
+                     state.get("simulated_localization") if args.uwb else state.get("source_timestamp"))
             )
 
-        wait_for(telemetry, processes, "dummy telemetry")
+        wait_for(telemetry, processes, "UWB observations" if survey else "dummy telemetry")
         print(
             "\nHelios is ready: http://127.0.0.1:5173/control\n"
             "Sign in: any @clemson.edu email · Password: SeniorDesign\n"

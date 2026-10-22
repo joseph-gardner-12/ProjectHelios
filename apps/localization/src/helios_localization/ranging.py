@@ -71,10 +71,16 @@ def parse_range_report(line: str) -> list[RangeMeasurement]:
     if not ranges_cm:
         raise ValueError("Range report has no anchor slots")
 
+    if len(ranges_cm) > 8:
+        raise ValueError("Range report exceeds eight anchor slots")
     measurements = []
+    seen = set()
     for distance_cm, anchor_id in zip(ranges_cm, anchor_ids, strict=True):
         if anchor_id < 0:
             continue
+        if anchor_id in seen:
+            raise ValueError("Duplicate anchor ID in range report")
+        seen.add(anchor_id)
         if distance_cm <= 0:
             raise ValueError("Active anchor has a nonpositive range")
         measurements.append(
@@ -94,8 +100,7 @@ def parse_range_report(line: str) -> list[RangeMeasurement]:
 def active_ranges_cm(measurements: list[RangeMeasurement]) -> dict[int, int]:
     """Return active ranges as a mapping from anchor ID to centimetres."""
     return {
-        measurement.anchor_id: round(measurement.distance_m * 100)
-        for measurement in measurements
+        measurement.anchor_id: round(measurement.distance_m * 100) for measurement in measurements
     }
 
 
@@ -317,40 +322,23 @@ def parse_record(raw, settings, session, received_at):
     )
 
 
-AT_RANGE = re.compile(
-    rb"AT\+RANGE=tid:(\d+),mask:([0-9a-fA-F]{1,2}),seq:(\d+),"
-    rb"range:\(([-0-9,]+)\),ancid:\(([-0-9,]+)\)"
-)
-
-
 def parse_mauwb(raw, settings, session, received_at):
-    """Manual §3.15, strict v1.1.6 shape; hardware qualification still pending."""
-    match = AT_RANGE.fullmatch(raw)
-    if not match:
-        raise ValueError("Not a v1.1.6 range report")
-    tag, mask, sequence, distances, ids = match.groups()
-    if int(tag) != settings.tag_id:
+    """Adapt James's collector parser to one calibrated solver epoch.
+
+    Anchor identity comes from ancid; mask is retained by the raw recording.
+    No accumulation across reports or guessed mask-bit interpretation.
+    """
+    measurements = parse_range_report(raw.decode("ascii"))
+    first = measurements[0]
+    if first.tag_id != settings.tag_id:
         raise ValueError("Wrong tag")
-    distances = [int(v) for v in distances.split(b",")]
-    ids = [int(v) for v in ids.split(b",")]
-    if len(distances) != 8 or len(ids) != 8:
-        raise ValueError("Expected eight range/anchor slots")
-    valid = int(mask, 16)
-    ranges = {}
-    for slot, (distance, anchor) in enumerate(zip(distances, ids, strict=True)):
-        if not valid & (1 << slot):
-            continue
-        key = f"A{anchor}"
-        if anchor < 0 or distance <= 0 or key in ranges:
-            raise ValueError("Invalid active anchor slot")
-        ranges[key] = distance / 100.0
     return RangeEpoch(
         session,
-        int(sequence),
+        first.sequence,
         settings.frame,
         received_at - settings.acquisition_delay,
         received_at,
         settings.timing_sigma,
-        ranges,
+        {f"A{item.anchor_id}": item.distance_m for item in measurements},
         "receive_estimate",
     )

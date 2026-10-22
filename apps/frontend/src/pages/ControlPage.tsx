@@ -13,7 +13,7 @@ const TICKS = [0, 2.5, 5, 7.5, 10]
 const clamp = (value: number, min: number, max: number) => Math.min(max, Math.max(min, value))
 const coordinates = (p: Position) => `${p.x.toFixed(1)}, ${p.y.toFixed(1)}, ${p.z.toFixed(1)} ft`
 
-function SpaceView({ drone, target, stale }: { drone: Position | null; target: Position; stale: boolean }) {
+function SpaceView({ drone, target, stale, source }: { drone: Position | null; target: Position; stale: boolean; source: string }) {
   const [angle, setAngle] = useState(0)
   // Orbit zero matches the dock-left view; the slider measures rotation from it.
   const radians = (315 + angle) * Math.PI / 180
@@ -33,7 +33,7 @@ function SpaceView({ drone, target, stale }: { drone: Position | null; target: P
     <section className="control-panel space-panel" aria-labelledby="space-title">
       <div className="panel-heading"><div><h2 id="space-title">Flight space</h2></div><span className="panel-detail">3D view</span></div>
       <div className="space-viewport">
-        <div className="position-readout"><span>Reported position · Dummy{stale ? " · Stale" : ""}</span><output aria-live="off">{drone ? coordinates(drone) : "Unavailable"}</output></div>
+        <div className="position-readout"><span>Reported position · {source}{stale ? " · Stale" : ""}</span><output aria-live="off">{drone ? coordinates(drone) : "Unavailable"}</output></div>
       <svg className="space-graph" viewBox="0 0 600 480" role="img" aria-label={`3D flight space. All axes range from 0 to 10 feet. Dock at 0, 0, 0. Reported position ${drone ? coordinates(drone) : "unavailable"}. Target at ${coordinates(target)}.`}>
         <polygon points={[{ x: 0, y: 0, z: 0 }, { x: 10, y: 0, z: 0 }, { x: 10, y: 10, z: 0 }, { x: 0, y: 10, z: 0 }].map(p => { const point = project(p); return `${point.x},${point.y}` }).join(' ')} fill="#17131d" />
         {TICKS.map(t => <g key={t}>{line({ x: t, y: 0, z: 0 }, { x: t, y: 10, z: 0 }, 'space-grid')}{line({ x: 0, y: t, z: 0 }, { x: 10, y: t, z: 0 }, 'space-grid')}</g>)}
@@ -77,7 +77,7 @@ export default function ControlPage() {
       <div className="control-intro"><h1>Helios Control</h1></div>
       <ControlSession control={control} />
       <div className="control-workspace">
-        <SpaceView drone={drone} target={target} stale={!control.fresh} />
+        <SpaceView drone={drone} target={target} stale={!control.fresh} source={control.snapshot?.source === "uwb" ? "UWB" : "Dummy"} />
         <section className="control-panel target-panel" aria-labelledby="target-title">
           <div className="panel-heading"><div><h2 id="target-title">Set your target</h2></div><span className="panel-detail">Top view</span></div>
           <div className="target-controls">

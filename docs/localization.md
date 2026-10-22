@@ -157,3 +157,60 @@ limit is only 100 ms. This is a demonstration, not hardware qualification.
 Ctrl+C in the launcher stops all six services. Logs are in `.helios/dev/logs/`.
 The existing `pnpm dev` dummy command demo is unchanged. The UWB waypoint demo has its own
 local dummy device and credential, and never opens aircraft or UWB serial ports.
+
+
+### Connect the real collector to the dashboard
+
+James's `record-ranges` and the estimator now share `parse_range_report`.
+`run` uses a bounded serial reader and passes each complete AT record through
+that parser, mapping `ancid` to surveyed IDs such as `A4`. It does not interpret
+mask bits or combine separate reports. At least four surveyed anchors in one
+report are required for a corrected fix; James's single-A4 samples cannot
+localize a tag on their own.
+
+Copy `apps/localization/configs/survey.example.toml` to a private survey file.
+Replace **all example anchor coordinates** with measured coordinates in metres,
+use the actual anchor IDs (`A0`, `A2`, etc.), and set:
+
+```toml
+protocol = "mauwb-at-v1.1.6"
+uwb_port = "COM4" # Windows example; use the actual /dev/cu.* or /dev/tty* port on Mac/Pi
+uwb_baud = 115200 # James's collector setting; verify your device
+tag_id = 1 # James's observed tag; verify your tag
+external_nav = false
+```
+
+For aircraft tracking, configure `mavlink_port`, its baud rate, the dock altitude
+datum, and antenna offset as described above. For a tag held at a known bench
+height instead, leave `mavlink_port = ""`, keep `tag_offset_frd = [0, 0, 0]`, and
+set `fixed_height` to that surveyed height in metres. Set `altitude_sigma` to
+the height uncertainty. This explicitly constrains Z; it does **not** measure
+vertical movement. Fixed-height mode refuses aircraft transmission and offsets
+that would need measured attitude. Recordings identify its altitude samples as
+`fixed-height-bench` and preserve the constraint in their configuration.
+
+With PostgreSQL/Redis installed, start the complete local hardware dashboard:
+
+```sh
+pnpm dev --survey /absolute/path/real-survey.toml
+```
+
+Stop an existing demo stack first. This command provisions a measurement-only
+local device with the survey's frame, starts `run --cloud`, and saves raw records,
+altitude inputs, and estimates to `.helios/dev/uwb-*.jsonl`. Close the Makerfabs
+configuration tool and `record-ranges` so only one process owns the collector.
+Sign in at http://127.0.0.1:5173/control with the local demo credentials and
+select **Real UWB collector** if more than one device appears. The original graph
+shows corrected positions (feet); the panel beneath shows metres, uncertainty,
+and measured/predicted/invalid status. Waypoint entry remains visible, but real
+measurement sessions do not send aircraft commands. The dummy demo remains
+available separately through `pnpm dev:uwb`.
+
+For an existing backend enrollment matching the survey frame, use:
+
+```sh
+pnpm localization:run --survey /absolute/path/real-survey.toml --record /absolute/path/new-capture.jsonl --cloud
+```
+
+Do not use a dummy-frame credential for real measurements. No synthetic fallback
+is used when the collector, required altitude, or four-anchor epoch is missing.

@@ -6,7 +6,11 @@ export function LocalizationDetails({ control }: { control: ReturnType<typeof us
   const snapshot = control.snapshot
   if (!snapshot) return null
   if (snapshot.capability === 'measurement') {
-    return <ObservationPanel snapshot={snapshot} fresh={!!control.fresh} />
+    return <div>
+      <p className="control-detail">Real UWB tracking · Waypoint entry is available for reference;
+        sending aircraft commands is disabled in this measurement-only session.</p>
+      <ObservationPanel snapshot={snapshot} fresh={!!control.fresh} />
+    </div>
   }
   const simulated = snapshot.simulated_localization
   if (!simulated) return null

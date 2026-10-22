@@ -93,7 +93,9 @@ def replay(path, settings):
         if manifest.get("type") != "manifest" or manifest.get("version") != 1:
             raise ValueError("Unsupported recording")
         # Changes in tuning require a new recording/explicit conversion, not silent replay drift.
-        if manifest["settings"] != json.loads(json.dumps(asdict(settings))):
+        recorded_settings = dict(manifest["settings"])
+        recorded_settings.setdefault("fixed_height", None)
+        if recorded_settings != json.loads(json.dumps(asdict(settings))):
             raise ValueError("Recording configuration does not match supplied survey")
         pipeline = Pipeline(settings, manifest["session"])
         previous = -1.0
