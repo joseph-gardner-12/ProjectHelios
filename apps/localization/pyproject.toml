@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Project Helios dock-side localization service scaffold"
 requires-python = ">=3.14,<3.15"
 dependencies = [
+    "pyserial>=3.5,<4",
     "websockets>=15,<17",
 ]
 
@@ -22,6 +23,7 @@ dev = ["pytest>=8,<10", "ruff>=0.15,<1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["src"]
 
 [tool.ruff]
 target-version = "py314"

@@ -2,7 +2,22 @@
 
 The localization application now includes a backend-connected dummy runtime.
 It runs on a laptop or Raspberry Pi without ranging or flight hardware.
-Real ranging, replay, and flight-controller integration remain unimplemented.
+USB range recording is implemented; replay and flight-controller integration remain unimplemented.
+
+## Record UWB range reports
+
+The MaUWB A4 collector shown in the commissioning record has automatic reporting
+enabled on `COM4` at 115200 baud. Close the Makerfabs Configuration Tool first,
+then record its read-only USB stream:
+
+```sh
+uv run --locked --project apps/localization helios-localization record-ranges
+```
+
+This writes append-only JSON Lines to `a4-range-reports.jsonl`. Override the
+port, baud rate, or output path with `--port`, `--baud`, and `--output`. The
+recorder never sends AT commands. Add `--echo` to also print each JSON record in
+the terminal. Stop it with Ctrl+C.
 
 `transport.py` owns the outbound WebSocket, authentication, heartbeats, and
 reconnection. `coordinator.py` owns command validation and lifecycle.
