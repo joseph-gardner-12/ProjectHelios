@@ -21,9 +21,15 @@ PRODUCTION_ENV = {
 }
 
 
+def process_environment():
+    # Strip application settings, but retain OS essentials needed by Windows Winsock.
+    allowed = {"PATH", "HOME", "SYSTEMROOT", "WINDIR", "TEMP", "TMP", "USERPROFILE"}
+    return {key: value for key, value in os.environ.items() if key.upper() in allowed}
+
+
 class ProductionConfigurationTests(SimpleTestCase):
     def evaluate(self, overrides=None, missing=None):
-        environment = {key: value for key, value in os.environ.items() if key in {"PATH", "HOME"}}
+        environment = process_environment()
         environment.update(PRODUCTION_ENV)
         environment.update(overrides or {})
         if missing:
@@ -96,7 +102,7 @@ class ProductionConfigurationTests(SimpleTestCase):
         result = subprocess.run(
             [sys.executable, "manage.py", "check"],
             cwd=settings.BASE_DIR,
-            env={key: value for key, value in os.environ.items() if key in {"PATH", "HOME"}},
+            env=process_environment(),
             capture_output=True,
             timeout=10,
             check=False,
