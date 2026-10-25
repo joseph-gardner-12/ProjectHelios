@@ -69,8 +69,41 @@ def main():
     recorded = commands.add_parser("replay", help="Offline deterministic measurement replay")
     recorded.add_argument("--survey", type=Path, required=True)
     recorded.add_argument("recording", type=Path)
+    calibration = commands.add_parser(
+        "calibrate-square", help="Estimate bench square size from a stationary interior tag"
+    )
+    calibration.add_argument("--survey", type=Path, required=True)
+    calibration.add_argument("--recording", type=Path, required=True)
+    calibration.add_argument(
+        "--output", type=Path, required=True, help="New survey; never overwritten"
+    )
+    calibration.add_argument(
+        "--corners",
+        nargs=4,
+        default=["A0", "A2", "A3", "A4"],
+        metavar=("ORIGIN", "X", "Y", "DIAGONAL"),
+    )
+    calibration.add_argument(
+        "--interior-tag",
+        action="store_true",
+        required=True,
+        help="Confirm a stationary tag inside a physical square, at the anchors' antenna height",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+    if args.command == "calibrate-square":
+        from dataclasses import asdict
+
+        from .calibration import calibrate_recording, write_square_survey
+        from .config import load_settings
+
+        try:
+            result = calibrate_recording(args.recording, load_settings(args.survey), args.corners)
+            write_square_survey(args.survey, args.output, result)
+            print(json.dumps({**asdict(result), "survey": str(args.output)}, allow_nan=False))
+        except (OSError, ValueError, KeyError, TypeError) as exc:
+            parser.error(str(exc))
+        return
     if args.command == "configure":
         try:
             configure(config_path(), args.backend, args.force)

@@ -1,0 +1,54 @@
+# Range-fit bench calibration, 2026-10-25. Recalibrate after moving any anchor.
+# Corner order: A0=dock/origin, A3=+X, A2=+Y, A4=diagonal.
+# Estimated side: 3.20778 m; fit RMS: 0.02861 m across 63 complete reports.
+# Fit residual is not an independently measured position-accuracy claim.
+version = 1
+frame = "square-bench-b1397781ad0e"
+protocol = "mauwb-at-v1.1.6"
+protocol_verified = false
+firmware = "V01_01_006"
+controller_firmware = "unverified"
+tag_id = 1
+# Mac collector port observed during commissioning; check /dev/cu.* on another Mac.
+uwb_port = "/dev/cu.wchusbserial10"
+uwb_baud = 115200
+mavlink_port = ""
+external_nav = false
+# Fixed coordinate for the shared antenna plane; vertical motion is not measured.
+fixed_height = 0.7466
+altitude_sigma = 0.15
+tag_offset_frd = [0.0, 0.0, 0.0]
+prediction_limit = 0.1
+timing_sigma = 0.02
+
+[metadata.square_calibration]
+method = "stationary-interior-tag-same-height"
+side_m = 3.207777909303075
+fit_rms_m = 0.028611058741344206
+samples = 63
+spread_m = 0.09999999999999987
+qualification = "bench estimate; square shape and tag placement assumed"
+
+[[anchors]]
+id = "A0"
+xyz = [0.0, 0.0, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A2"
+xyz = [0.0, 3.207777909303075, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A3"
+xyz = [3.207777909303075, 0.0, 0.7466]
+bias = 0.0
+sigma = 0.1
+
+[[anchors]]
+id = "A4"
+xyz = [3.207777909303075, 3.207777909303075, 0.7466]
+bias = 0.0
+sigma = 0.1

@@ -121,3 +121,15 @@ to the nonlinear solver and local dashboard. Both `record-ranges` and `run` now
 use the same anchor-ID parser. Supply a real four-anchor survey and either
 flight-controller altitude or an explicit fixed-height bench constraint. See
 [real collector setup](../../docs/localization.md#connect-the-real-collector-to-the-dashboard).
+
+For a square bench, `pnpm localization:calibrate-square` estimates side length
+and tag X/Y from a stationary tag inside the square, without exact centering.
+It reads a running session's recording and writes a new survey; see
+[square calibration](../../docs/localization.md#estimate-a-squares-size-from-uwb-ranges)
+for placement requirements and the restart command.
+
+The current calibrated Mac bench starts with
+`pnpm dev --survey apps/localization/configs/square-bench-mac.toml`.
+It uses the observed WCH serial port and the A0/A3/A2/A4 corner order; see
+[Mac bench setup](../../docs/localization.md#calibrated-mac-bench-setup) before
+changing the layout or using a different computer.

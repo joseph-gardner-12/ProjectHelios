@@ -15,6 +15,7 @@
     "localization:simulate": "uv run --locked --project apps/localization helios-localization simulate",
     "localization:replay": "uv run --locked --project apps/localization helios-localization replay",
     "localization:run": "uv run --locked --project apps/localization helios-localization run",
+    "localization:calibrate-square": "uv run --locked --project apps/localization helios-localization calibrate-square",
     "test:localization": "uv run --locked --project apps/localization pytest -c apps/localization/pyproject.toml apps/localization/tests",
     "lint:localization": "uv run --locked --project apps/localization ruff check apps/localization",
     "dev:uwb": "uv run --locked --project apps/backend python scripts/dev.py --uwb",

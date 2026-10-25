@@ -215,6 +215,96 @@ pnpm localization:run --survey /absolute/path/real-survey.toml --record /absolut
 Do not use a dummy-frame credential for real measurements. No synthetic fallback
 is used when the collector, required altitude, or four-anchor epoch is missing.
 
+### Estimate a square's size from UWB ranges
+
+For a bench square, manual side-length entry can be replaced by a stationary-tag
+calibration. The physical corner order must be known:
+
+```text
+A3 -------- A4
+|            |
+|    tag     |
+|            |
+A0 -------- A2
+dock          +X
+```
+
+A0 defines the X/Y origin, A2 defines +X, and A3 defines +Y. All four antennas
+and the tag antenna must share the fixed bench height. Put the tag **inside**
+the square, away from its edges, and hold everything still for ten seconds.
+Exact centering is unnecessary: calibration fits side length and tag X/Y jointly.
+It assumes the anchors actually form a square. It cannot verify square shape,
+height, or a common range bias from a single stationary tag. An exterior tag can
+imply an alternative smaller square, so interior placement is required.
+
+While the hardware dashboard records, use its current `.helios/dev/uwb-*.jsonl`
+file (replace the example recording name below). The command reads the recording
+and does not open the serial port:
+
+```sh
+pnpm localization:calibrate-square --survey apps/localization/configs/table-bench.toml --recording .helios/dev/uwb-SESSION.jsonl --output .helios/dev/square-bench.toml --interior-tag
+```
+
+Use the survey that started that recording. `--interior-tag` confirms the
+placement assumption; `--corners A0 A2 A3 A4` specifies origin, +X, +Y, and diagonal
+if different IDs are used. Only the last ten recorded seconds count, with at
+least 30 complete reports spanning four seconds. Partial epochs, wrong tags and
+duplicates do not fill missing ranges. Excess movement or an inconsistent square
+fit rejects calibration without writing a survey.
+
+On success, the command prints estimated side length, tag X/Y, fit residual and
+sample count. It writes a new survey with a distinct frame and preserves serial
+settings, range biases and uncertainties. It never overwrites an existing file.
+The survey remains an unqualified, measurement-only bench estimate. Stop the
+current launcher and restart using the generated survey:
+
+```sh
+pnpm dev --survey .helios/dev/square-bench.toml
+```
+
+Then move the tag to check tracking. The square size stays fixed during tracking;
+moving an anchor requires a new calibration. Validate distances and positions
+against physical ground truth before relying on accuracy.
+
+### Calibrated Mac bench setup
+
+The checked-in `apps/localization/configs/square-bench-mac.toml` contains the
+2026-10-25 bench calibration: an estimated 3.20778 m square, with A0 at the dock,
+A3 on +X, A2 on +Y, and A4 at the opposite corner. This order reflects the A2/A3
+physical swap and differs from the default calibration corner order above.
+Its 2.86 cm range-fit RMS is not an independent position-accuracy measurement.
+
+Close other serial readers, then start the full stack from the repository root:
+
+```sh
+pnpm dev --survey apps/localization/configs/square-bench-mac.toml
+```
+
+Open `http://127.0.0.1:5173/control` and select Real UWB. The current button label
+still says COM5; the configured reader uses `/dev/cu.wchusbserial10` on this Mac.
+Use `ls /dev/cu.*` to check the actual collector port on another machine. A WCH
+collector without a serial port may need the official WCH macOS driver and user
+approval under System Settings > General > Login Items & Extensions. Sign in
+using the local demo credentials described above.
+
+Keep all antennas at the same height with clear tag-to-anchor paths above
+computers and metal equipment. Z remains the fixed bench coordinate 0.7466 m;
+it is not a measurement of the physical height after raising the antennas.
+Reports arrived about every 150 ms in this session, exceeding the current 100 ms
+freshness budget, so brief stale indications are expected between reports.
+
+After moving an anchor, keep the tag stationary inside the square for ten seconds
+and recalibrate from the active recording, explicitly preserving this corner order:
+
+```sh
+pnpm localization:calibrate-square --survey apps/localization/configs/square-bench-mac.toml --recording .helios/dev/uwb-SESSION.jsonl --output .helios/dev/square-bench-new.toml --corners A0 A3 A2 A4 --interior-tag
+```
+
+If the current run uses a newer generated survey, pass that survey as `--survey`
+instead. Restart with the new output only after calibration succeeds. Raw
+recordings, enrollment files, and subsequent local surveys stay in ignored
+`.helios/dev/`.
+
 ### Native Windows setup and source toggle
 
 No Docker or WSL is required. Install Node.js 24+, pnpm 11, uv, native PostgreSQL
