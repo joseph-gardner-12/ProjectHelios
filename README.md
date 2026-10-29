@@ -1,7 +1,7 @@
 # Project Helios
 
 A pnpm workspace with a React + TypeScript frontend and a Python/Django backend.
-Like Staccato Music, pnpm orchestrates development from the repository root;
+pnpm orchestrates development from the repository root;
 uv manages Python dependencies and the backend virtual environment.
 
 ## Layout
